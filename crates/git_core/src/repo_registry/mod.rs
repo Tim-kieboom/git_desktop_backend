@@ -1,5 +1,8 @@
 use chrono::{DateTime, Utc};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use thiserror::Error;
 use vecmap::{ids::IdGenerator, impl_ids};
 
@@ -30,8 +33,10 @@ impl<S: RepoStorage> RepoRegistry<S> {
         let name = name.into();
         let path = path.into().canonicalize().map_err(StoreError::io)?;
 
+        Self::check_if_real_git_repo(&path)?;
+
         self.storage.update(|store| {
-            if let Some(entry) = self.find_by_path_or_name(store, &name, &path) {
+            if let Some(entry) = self.find_by_name_or_path(store, &name, &path) {
                 return Err(if entry.path == path {
                     StoreError::DuplicatePath(path)
                 } else {
@@ -69,21 +74,22 @@ impl<S: RepoStorage> RepoRegistry<S> {
     pub fn list(&self) -> Result<RepoStore, RepoError> {
         self.storage.load().map_err(RepoError::Store)
     }
+    
+    fn check_if_real_git_repo(path: &Path) -> Result<(), git2::Error> {
+        git2::Repository::open(&path).map(|_| ())
+    }
 
     fn find_by_path<'a>(&self, store: &'a RepoStore, path: &Path) -> Option<&'a RepoEntry> {
         store.entries.values().find(|entry| entry.path == path)
     }
 
-    fn find_by_path_or_name<'a>(
+    fn find_by_name_or_path<'a>(
         &self,
         store: &'a RepoStore,
         name: &str,
         path: &Path,
     ) -> Option<&'a RepoEntry> {
-        store
-            .entries
-            .values()
-            .find(|entry| *entry.name == *name || entry.path == path)
+        store.entries.values().find(|e| *e.name == *name || e.path == path)
     }
 }
 
@@ -111,5 +117,12 @@ impl RepoEntry {
 #[derive(Debug, Clone, Error)]
 pub enum RepoError {
     #[error("{0}")]
+    Git2(Arc<git2::Error>),
+    #[error("{0}")]
     Store(#[from] storage::StoreError),
+}
+impl From<git2::Error> for RepoError {
+    fn from(value: git2::Error) -> Self {
+        Self::Git2(Arc::new(value))
+    }
 }

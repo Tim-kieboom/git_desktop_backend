@@ -1,36 +1,49 @@
 use super::*;
 use crate::repo_registry::storage::memory_storage::MemoryStorage;
+use crate::test_utils::{TestRepo, plain_dir};
 
 fn registry() -> RepoRegistry<MemoryStorage> {
     RepoRegistry::<MemoryStorage>::new().unwrap()
 }
 
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("git_core_{}_{name}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
-
 #[test]
 fn add_then_list_contains_entry() {
     let reg = registry();
-    let dir = temp_dir("add_list");
-    reg.add(&dir, "one").unwrap();
+    let repo = TestRepo::init();
+    reg.add(repo.path(), "one").unwrap();
 
     let store = reg.list().unwrap();
     let entries: Vec<_> = store.entries.values().collect();
     assert_eq!(entries.len(), 1);
     assert_eq!(&*entries[0].name, "one");
-    assert_eq!(entries[0].path, dir.canonicalize().unwrap());
+    assert_eq!(entries[0].path, repo.path().canonicalize().unwrap());
+}
+
+#[test]
+fn add_works_for_repo_with_history() {
+    let reg = registry();
+    let repo = TestRepo::with_initial_commit();
+    reg.add(repo.path(), "one").unwrap();
+    assert_eq!(reg.list().unwrap().entries.values().count(), 1);
+}
+
+#[test]
+fn add_non_git_directory_fails() {
+    let reg = registry();
+    let dir = plain_dir();
+
+    let err = reg.add(dir.path(), "x").unwrap_err();
+    assert!(matches!(err, RepoError::Git2(_)));
+    assert_eq!(reg.list().unwrap().entries.values().count(), 0);
 }
 
 #[test]
 fn add_duplicate_path_fails() {
     let reg = registry();
-    let dir = temp_dir("dup_path");
-    reg.add(&dir, "a").unwrap();
+    let repo = TestRepo::init();
+    reg.add(repo.path(), "a").unwrap();
 
-    let err = reg.add(&dir, "b").unwrap_err();
+    let err = reg.add(repo.path(), "b").unwrap_err();
     assert!(matches!(err, RepoError::Store(StoreError::DuplicatePath(_))));
     assert_eq!(reg.list().unwrap().entries.values().count(), 1);
 }
@@ -38,22 +51,20 @@ fn add_duplicate_path_fails() {
 #[test]
 fn add_duplicate_name_fails() {
     let reg = registry();
-    let a = temp_dir("dup_name_a");
-    let b = temp_dir("dup_name_b");
-    reg.add(&a, "same").unwrap();
+    let (a, b) = (TestRepo::init(), TestRepo::init());
+    reg.add(a.path(), "same").unwrap();
 
-    let err = reg.add(&b, "same").unwrap_err();
+    let err = reg.add(b.path(), "same").unwrap_err();
     assert!(matches!(err, RepoError::Store(StoreError::DuplicateName(_))));
 }
 
 #[test]
 fn add_equivalent_path_spellings_are_duplicates() {
     let reg = registry();
-    let dir = temp_dir("spelling");
-    reg.add(&dir, "a").unwrap();
+    let repo = TestRepo::init();
+    reg.add(repo.path(), "a").unwrap();
 
-    let with_dot = dir.join(".");
-    let err = reg.add(with_dot, "b").unwrap_err();
+    let err = reg.add(repo.path().join("."), "b").unwrap_err();
     assert!(matches!(err, RepoError::Store(StoreError::DuplicatePath(_))));
 }
 
@@ -67,10 +78,10 @@ fn add_missing_path_fails() {
 #[test]
 fn get_and_find_return_added_entry() {
     let reg = registry();
-    let dir = temp_dir("get_find");
-    reg.add(&dir, "a").unwrap();
+    let repo = TestRepo::init();
+    reg.add(repo.path(), "a").unwrap();
 
-    let found = reg.find(&dir).unwrap().expect("found by path");
+    let found = reg.find(repo.path()).unwrap().expect("found by path");
     let got = reg.get(found.id).unwrap().expect("found by id");
     assert_eq!(got.path, found.path);
 }
@@ -78,18 +89,17 @@ fn get_and_find_return_added_entry() {
 #[test]
 fn find_unknown_path_returns_none() {
     let reg = registry();
-    let known = temp_dir("find_known");
-    let other = temp_dir("find_other");
-    reg.add(&known, "a").unwrap();
-    assert!(reg.find(&other).unwrap().is_none());
+    let (known, other) = (TestRepo::init(), TestRepo::init());
+    reg.add(known.path(), "a").unwrap();
+    assert!(reg.find(other.path()).unwrap().is_none());
 }
 
 #[test]
 fn remove_deletes_entry_and_reports_result() {
     let reg = registry();
-    let dir = temp_dir("remove");
-    reg.add(&dir, "a").unwrap();
-    let id = reg.find(&dir).unwrap().unwrap().id;
+    let repo = TestRepo::init();
+    reg.add(repo.path(), "a").unwrap();
+    let id = reg.find(repo.path()).unwrap().unwrap().id;
 
     assert!(reg.remove(id).unwrap());
     assert!(reg.get(id).unwrap().is_none());
@@ -99,14 +109,12 @@ fn remove_deletes_entry_and_reports_result() {
 #[test]
 fn ids_are_unique_across_removals() {
     let reg = registry();
-    let a = temp_dir("ids_a");
-    let b = temp_dir("ids_b");
-    let c = temp_dir("ids_c");
-    reg.add(&a, "a").unwrap();
-    let first = reg.find(&a).unwrap().unwrap().id;
+    let (a, b, c) = (TestRepo::init(), TestRepo::init(), TestRepo::init());
+    reg.add(a.path(), "a").unwrap();
+    let first = reg.find(a.path()).unwrap().unwrap().id;
     reg.remove(first).unwrap();
-    reg.add(&b, "b").unwrap();
-    reg.add(&c, "c").unwrap();
+    reg.add(b.path(), "b").unwrap();
+    reg.add(c.path(), "c").unwrap();
 
     let ids: Vec<_> = reg.list().unwrap().entries.values().map(|e| e.id).collect();
     assert_eq!(ids.len(), 2);

@@ -2,8 +2,8 @@
 resolver = "3"
 members = [
     "crates/cli",
-    "crates/core", 
     "crates/deamon", 
+    "crates/git_core", 
     "crates/provider",
     "crates/changelog", 
 ]

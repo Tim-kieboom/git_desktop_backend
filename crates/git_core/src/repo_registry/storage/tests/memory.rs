@@ -21,7 +21,9 @@ fn save_then_load_round_trips() {
 #[test]
 fn update_error_is_propagated() {
     let s = MemoryStorage::new().unwrap();
-    let err = s.update(|_| Err(StoreError::Unknown("boom".into()))).unwrap_err();
+    let err = s
+        .update(|_| Err(StoreError::Unknown("boom".into())))
+        .unwrap_err();
     assert!(matches!(err, StoreError::Unknown(_)));
 }
 
