@@ -1,7 +1,10 @@
+//! In-memory storage for tests and demos.
+
 use crate::repo_registry::storage::{RepoStorage, RepoStore, StoreError};
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use thiserror::Error;
 
+/// Non-persistent storage that lives as long as the value; meant for tests and demos.
 pub struct MemoryStorage {
     entries: RwLock<RepoStore>,
 }
@@ -32,8 +35,10 @@ impl RepoStorage for MemoryStorage {
     }
 }
 
+/// Errors specific to [`MemoryStorage`].
 #[derive(Debug, Clone, Error)]
 pub enum MemoryError {
+    /// The internal lock was poisoned by a panic in another thread.
     #[error("lock error: {0}")]
     Lock(Box<str>),
 }

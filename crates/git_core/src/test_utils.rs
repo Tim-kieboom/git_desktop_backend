@@ -62,6 +62,8 @@ impl TestRepo {
         index
             .add_all(["*"], IndexAddOption::DEFAULT, None)
             .unwrap();
+        // add_all skips deletions; update_all stages them
+        index.update_all(["*"], None).unwrap();
         index.write().unwrap();
     }
 

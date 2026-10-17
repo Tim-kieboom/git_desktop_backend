@@ -1,3 +1,5 @@
+//! File-backed storage: one `repos.json` in the per-user data directory.
+
 use crate::repo_registry::storage::{RepoStorage, RepoStore, StoreError};
 use std::{
     fs::File,
@@ -91,10 +93,13 @@ impl RepoStorage for JsonStorage {
     }
 }
 
+/// Errors specific to [`JsonStorage`].
 #[derive(Debug, Clone, Error)]
 pub enum JsonError {
+    /// `repos.json` couldn't be parsed or serialized.
     #[error("{0}")]
     Json(Arc<serde_json::Error>),
+    /// The OS did not provide a per-user data directory.
     #[error(
         "error while trying to open/create projectDir: valid home directory path could be retrieved from the operating system"
     )]

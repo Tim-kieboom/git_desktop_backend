@@ -1,3 +1,5 @@
+//! Registry of the local git repositories the app knows about.
+
 use chrono::{DateTime, Utc};
 use std::{
     path::{Path, PathBuf},
@@ -12,19 +14,32 @@ pub mod storage;
 #[cfg(test)]
 mod tests;
 
+/// Persistent list of registered repositories, backed by a [`RepoStorage`].
+///
+/// Every mutation runs inside [`RepoStorage::update`], so concurrent callers never lose updates.
 pub struct RepoRegistry<S: RepoStorage> {
     storage: S,
 }
 impl<S: RepoStorage> RepoRegistry<S> {
+    /// Creates a registry on top of `S`'s default storage location.
     pub fn new() -> Result<Self, RepoError> {
         let storage = S::new().map_err(RepoError::Store)?;
         Ok(Self { storage })
     }
 
+    /// Creates a registry on top of an already configured storage (e.g. a custom directory).
     pub fn with_storage(storage: S) -> Self {
         Self { storage }
     }
 
+    /// Registers the repository at `path` under `name`.
+    ///
+    /// The path is canonicalized, so different spellings of the same directory count as one.
+    ///
+    /// # Errors
+    /// - [`StoreError::Io`] if `path` doesn't exist
+    /// - [`RepoError::Git2`] if `path` is not a git repository
+    /// - [`StoreError::DuplicatePath`] / [`StoreError::DuplicateName`] if the path or name is taken
     pub fn add(
         &self,
         path: impl Into<PathBuf>,
@@ -51,6 +66,9 @@ impl<S: RepoStorage> RepoRegistry<S> {
         Ok(())
     }
 
+    /// Unregisters a repository. Returns `false` when `id` wasn't registered.
+    ///
+    /// Only the registry entry is removed; nothing on disk is touched.
     pub fn remove(&self, id: RepoId) -> Result<bool, RepoError> {
         let mut is_removed = false;
         self.storage.update(|store| {
@@ -60,17 +78,20 @@ impl<S: RepoStorage> RepoRegistry<S> {
         Ok(is_removed)
     }
 
+    /// Looks up a repository by id.
     pub fn get(&self, id: RepoId) -> Result<Option<RepoEntry>, RepoError> {
         let store = self.storage.load()?;
         Ok(store.entries.get(id).cloned())
     }
 
+    /// Looks up a repository by path (canonicalized first, so `path` must exist).
     pub fn find(&self, path: &Path) -> Result<Option<RepoEntry>, RepoError> {
         let path = path.canonicalize().map_err(StoreError::io)?;
         let store = self.storage.load()?;
         Ok(self.find_by_path(&store, &path).cloned())
     }
 
+    /// Snapshot of all registered repositories.
     pub fn list(&self) -> Result<RepoStore, RepoError> {
         self.storage.load().map_err(RepoError::Store)
     }
@@ -94,16 +115,23 @@ impl<S: RepoStorage> RepoRegistry<S> {
 }
 
 impl_ids!(RepoId);
+/// Display name of a registered repository; unique within a registry.
 pub type RepoName = Box<str>;
 
+/// One registered repository.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RepoEntry {
+    /// Stable id, unique within the registry and never reused.
     pub id: RepoId,
+    /// Display name, unique within the registry.
     pub name: RepoName,
+    /// Canonical absolute path of the working directory.
     pub path: PathBuf,
+    /// When the repository was registered.
     pub added_at: DateTime<Utc>,
 }
 impl RepoEntry {
+    /// Creates an entry with a fresh id from `alloc`, stamped with the current time.
     pub fn new(alloc: &mut IdGenerator<RepoId>, name: RepoName, path: PathBuf) -> Self {
         Self {
             name,
@@ -114,10 +142,13 @@ impl RepoEntry {
     }
 }
 
+/// Errors from [`RepoRegistry`] operations.
 #[derive(Debug, Clone, Error)]
 pub enum RepoError {
+    /// The path could not be opened as a git repository.
     #[error("{0}")]
     Git2(Arc<git2::Error>),
+    /// The underlying storage failed or rejected the change.
     #[error("{0}")]
     Store(#[from] storage::StoreError),
 }
