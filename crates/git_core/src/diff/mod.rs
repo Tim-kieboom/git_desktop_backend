@@ -139,6 +139,7 @@ pub fn diff_files(
                 .include_untracked(true)
                 .recurse_untracked_dirs(true)
                 .show_untracked_content(true);
+
             repo.diff_index_to_workdir(None, Some(&mut options))?
         }
         DiffTarget::Staged => {
@@ -151,6 +152,7 @@ pub fn diff_files(
             repo.diff_tree_to_index(head_tree.as_ref(), None, Some(&mut options))?
         }
     };
+
     diff.find_similar(None)?;
 
     let mut files = Vec::new();
@@ -172,6 +174,7 @@ fn convert_patch(patch: &mut Patch<'_>) -> Result<FileDiff, DiffError> {
         Delta::Typechange => FileStatus::TypeChange,
         _ => FileStatus::Modified,
     };
+
     let (new_path, old_path) = (delta.new_file().path(), delta.old_file().path());
     let path = match status {
         FileStatus::Deleted => old_path,
@@ -179,9 +182,11 @@ fn convert_patch(patch: &mut Patch<'_>) -> Result<FileDiff, DiffError> {
     }
     .map(Path::to_path_buf)
     .unwrap_or_default();
+
     let old_path = matches!(status, FileStatus::Renamed | FileStatus::Copied)
         .then(|| old_path.map(Path::to_path_buf))
         .flatten();
+
     let is_binary = delta.flags().is_binary();
 
     let mut hunks = Vec::with_capacity(patch.num_hunks());

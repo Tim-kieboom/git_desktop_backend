@@ -10,7 +10,7 @@ git2 = "0.21.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 thiserror = "2.0.21"
-vecmap = { git = "https://github.com/Tim-kieboom/vecmap.git" }
+vecmap = { git = "https://github.com/Tim-kieboom/vecmap.git", version = "0.1.3" }
 
 [dev-dependencies]
 tempfile = "3.27.0"

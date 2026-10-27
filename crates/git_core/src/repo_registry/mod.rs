@@ -95,9 +95,10 @@ impl<S: RepoStorage> RepoRegistry<S> {
     pub fn list(&self) -> Result<RepoStore, RepoError> {
         self.storage.load().map_err(RepoError::Store)
     }
-    
+
     fn check_if_real_git_repo(path: &Path) -> Result<(), git2::Error> {
-        git2::Repository::open(&path).map(|_| ())
+        git2::Repository::open(path)?;
+        Ok(())
     }
 
     fn find_by_path<'a>(&self, store: &'a RepoStore, path: &Path) -> Option<&'a RepoEntry> {
@@ -110,7 +111,10 @@ impl<S: RepoStorage> RepoRegistry<S> {
         name: &str,
         path: &Path,
     ) -> Option<&'a RepoEntry> {
-        store.entries.values().find(|e| *e.name == *name || e.path == path)
+        store
+            .entries
+            .values()
+            .find(|e| *e.name == *name || e.path == path)
     }
 }
 

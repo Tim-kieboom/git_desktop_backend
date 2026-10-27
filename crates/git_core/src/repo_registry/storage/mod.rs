@@ -5,9 +5,14 @@ pub mod memory_storage;
 use std::{path::PathBuf, sync::Arc};
 #[cfg(test)]
 mod tests;
-
 use thiserror::Error;
-use vecmap::{ids::IdGenerator, vec_map::VecMap};
+use vecmap::{
+    ids::IdGenerator,
+    vec_map::{
+        VecMap,
+        iter::{VecMapValuesIntoIter, VecMapValuesIter, VecMapValuesIterMut},
+    },
+};
 
 use crate::repo_registry::{RepoEntry, RepoId};
 
@@ -80,5 +85,38 @@ impl RepoStore {
     /// An empty store.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn iter(&self) -> VecMapValuesIter<'_, RepoEntry> {
+        self.entries.values()
+    }
+
+    pub fn iter_mut(&mut self) -> VecMapValuesIterMut<'_, RepoEntry> {
+        self.entries.values_mut()
+    }
+}
+
+impl<'a> IntoIterator for &'a RepoStore {
+    type Item = &'a RepoEntry;
+    type IntoIter = VecMapValuesIter<'a, RepoEntry>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+impl<'a> IntoIterator for &'a mut RepoStore {
+    type Item = &'a mut RepoEntry;
+    type IntoIter = VecMapValuesIterMut<'a, RepoEntry>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+impl IntoIterator for RepoStore {
+    type Item = RepoEntry;
+    type IntoIter = VecMapValuesIntoIter<RepoEntry>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.into_values()
     }
 }

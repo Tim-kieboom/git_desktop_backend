@@ -2,5 +2,6 @@
 
 pub mod diff;
 pub mod repo_registry;
+pub mod status;
 #[cfg(test)]
 mod test_utils;

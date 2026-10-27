@@ -8,10 +8,11 @@ fn main() {
 
 fn run() -> Result<(), RepoError> {
     let register = RepoRegistry::<MemoryStorage>::new()?;
-    register.add("/mnt/windows", "test")?;
-    register.add("/mnt", "test")?;
-    let repos = register.list()?;
-    let values = repos.entries.values().collect::<Vec<_>>();
-    println!("{:#?}", values);
+    register.add("./", "this")?;
+    register.add("../../TerminalCode", "trcode")?;
+    for repo in &register.list()? {
+        println!("{:#?}\n", repo)
+    }
+
     Ok(())
 }
