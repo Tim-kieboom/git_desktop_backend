@@ -1,6 +1,6 @@
 //! Integration tests: the public registry API on top of the JSON backend.
-use git_core::repo_registry::{
-    RepoError, RepoRegistry,
+use git_core::{
+    CoreError, RepoError, RepoRegistry,
     storage::{StoreError, json_storage::JsonStorage},
 };
 use std::{path::Path, sync::Arc};
@@ -48,7 +48,7 @@ fn duplicate_is_rejected_across_reopen() {
     let err = registry(data.path()).add(repo.path(), "b").unwrap_err();
     assert!(matches!(
         err,
-        RepoError::Store(StoreError::DuplicatePath(_))
+        CoreError::Repo(RepoError::Store(StoreError::DuplicatePath(_)))
     ));
 }
 
@@ -57,9 +57,19 @@ fn non_git_directory_is_rejected_and_not_persisted() {
     let data = plain_dir();
     let not_a_repo = plain_dir();
 
-    let err = registry(data.path()).add(not_a_repo.path(), "x").unwrap_err();
-    assert!(matches!(err, RepoError::Git(_)));
-    assert_eq!(registry(data.path()).list().unwrap().entries.values().count(), 0);
+    let err = registry(data.path())
+        .add(not_a_repo.path(), "x")
+        .unwrap_err();
+    assert!(matches!(err, CoreError::Repo(RepoError::Git(_))));
+    assert_eq!(
+        registry(data.path())
+            .list()
+            .unwrap()
+            .entries
+            .values()
+            .count(),
+        0
+    );
 }
 
 #[test]
@@ -102,7 +112,12 @@ fn separate_storage_instances_do_not_lose_updates() {
     handles.into_iter().for_each(|h| h.join().unwrap());
 
     assert_eq!(
-        registry(data.path()).list().unwrap().entries.values().count(),
+        registry(data.path())
+            .list()
+            .unwrap()
+            .entries
+            .values()
+            .count(),
         8
     );
 }

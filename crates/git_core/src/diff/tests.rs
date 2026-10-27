@@ -8,8 +8,16 @@ fn numbered(n: u32) -> String {
 #[test]
 fn clean_repo_has_no_diff() {
     let repo = TestRepo::with_initial_commit();
-    assert!(diff_files(&repo.repo, DiffTarget::Unstaged, None).unwrap().is_empty());
-    assert!(diff_files(&repo.repo, DiffTarget::Staged, None).unwrap().is_empty());
+    assert!(
+        diff_files(&repo.repo, DiffTarget::Unstaged, None)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        diff_files(&repo.repo, DiffTarget::Staged, None)
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -32,13 +40,28 @@ fn modified_file_has_structured_hunk() {
     let kinds: Vec<_> = hunk.lines.iter().map(|l| l.kind).collect();
     assert_eq!(
         kinds,
-        [LineKind::Context, LineKind::Removed, LineKind::Added, LineKind::Context]
+        [
+            LineKind::Context,
+            LineKind::Removed,
+            LineKind::Added,
+            LineKind::Context
+        ]
     );
 
     let removed = &hunk.lines[1];
-    assert_eq!((removed.content.as_str(), removed.old_lineno, removed.new_lineno), ("two", Some(2), None));
+    assert_eq!(
+        (
+            removed.content.as_str(),
+            removed.old_lineno,
+            removed.new_lineno
+        ),
+        ("two", Some(2), None)
+    );
     let added = &hunk.lines[2];
-    assert_eq!((added.content.as_str(), added.old_lineno, added.new_lineno), ("TWO", None, Some(2)));
+    assert_eq!(
+        (added.content.as_str(), added.old_lineno, added.new_lineno),
+        ("TWO", None, Some(2))
+    );
 }
 
 #[test]
@@ -47,7 +70,9 @@ fn patch_text_is_unified_diff() {
     repo.commit_file("a.txt", "one\ntwo\n", "add a");
     repo.write("a.txt", "one\n2\n");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
     assert!(diff.patch.starts_with("diff --git a/a.txt b/a.txt"));
     assert!(diff.patch.contains("\n-two\n"));
     assert!(diff.patch.contains("\n+2\n"));
@@ -57,10 +82,14 @@ fn patch_text_is_unified_diff() {
 fn distant_changes_make_separate_hunks() {
     let repo = TestRepo::init();
     repo.commit_file("big.txt", &numbered(100), "add");
-    let changed = numbered(100).replace("line 2\n", "CHANGED 2\n").replace("line 99\n", "CHANGED 99\n");
+    let changed = numbered(100)
+        .replace("line 2\n", "CHANGED 2\n")
+        .replace("line 99\n", "CHANGED 99\n");
     repo.write("big.txt", &changed);
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("big.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("big.txt"))
+        .unwrap()
+        .unwrap();
     assert_eq!(diff.hunks.len(), 2);
     assert!(diff.hunks[0].new_start < diff.hunks[1].new_start);
 }
@@ -70,10 +99,17 @@ fn untracked_file_is_added_when_unstaged() {
     let repo = TestRepo::with_initial_commit();
     repo.write("new.txt", "hello\nworld\n");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("new.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("new.txt"))
+        .unwrap()
+        .unwrap();
     assert_eq!(diff.status, FileStatus::Added);
     assert_eq!(diff.hunks[0].lines.len(), 2);
-    assert!(diff.hunks[0].lines.iter().all(|l| l.kind == LineKind::Added));
+    assert!(
+        diff.hunks[0]
+            .lines
+            .iter()
+            .all(|l| l.kind == LineKind::Added)
+    );
 }
 
 #[test]
@@ -83,7 +119,7 @@ fn untracked_file_in_new_directory_is_listed() {
 
     let diffs = diff_files(&repo.repo, DiffTarget::Unstaged, None).unwrap();
     assert_eq!(diffs.len(), 1);
-    assert_eq!(diffs[0].path, Path::new("sub/deep/new.txt"));
+    assert_eq!(diffs[0].path.as_ref(), Path::new("sub/deep/new.txt"));
 }
 
 #[test]
@@ -92,12 +128,28 @@ fn staging_moves_change_from_unstaged_to_staged() {
     repo.write("README.md", "changed\n");
     let readme = Path::new("README.md");
 
-    assert!(file_diff(&repo.repo, DiffTarget::Unstaged, readme).unwrap().is_some());
-    assert!(file_diff(&repo.repo, DiffTarget::Staged, readme).unwrap().is_none());
+    assert!(
+        file_diff(&repo.repo, DiffTarget::Unstaged, readme)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        file_diff(&repo.repo, DiffTarget::Staged, readme)
+            .unwrap()
+            .is_none()
+    );
 
     repo.stage("README.md");
-    assert!(file_diff(&repo.repo, DiffTarget::Unstaged, readme).unwrap().is_none());
-    assert!(file_diff(&repo.repo, DiffTarget::Staged, readme).unwrap().is_some());
+    assert!(
+        file_diff(&repo.repo, DiffTarget::Unstaged, readme)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        file_diff(&repo.repo, DiffTarget::Staged, readme)
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[test]
@@ -108,8 +160,12 @@ fn partially_staged_file_shows_each_side() {
     repo.stage("a.txt");
     repo.write("a.txt", "1\nstaged\nunstaged\n");
 
-    let staged = file_diff(&repo.repo, DiffTarget::Staged, Path::new("a.txt")).unwrap().unwrap();
-    let unstaged = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt")).unwrap().unwrap();
+    let staged = file_diff(&repo.repo, DiffTarget::Staged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
+    let unstaged = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
     assert!(staged.patch.contains("+staged"));
     assert!(!staged.patch.contains("unstaged"));
     assert!(unstaged.patch.contains("+unstaged"));
@@ -122,7 +178,9 @@ fn staged_diff_works_before_first_commit() {
     repo.write("first.txt", "hi\n");
     repo.stage("first.txt");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Staged, Path::new("first.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Staged, Path::new("first.txt"))
+        .unwrap()
+        .unwrap();
     assert_eq!(diff.status, FileStatus::Added);
 }
 
@@ -132,9 +190,11 @@ fn deleted_file_reports_old_path_and_removed_lines() {
     repo.commit_file("gone.txt", "bye\n", "add");
     repo.remove("gone.txt");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("gone.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("gone.txt"))
+        .unwrap()
+        .unwrap();
     assert_eq!(diff.status, FileStatus::Deleted);
-    assert_eq!(diff.path, Path::new("gone.txt"));
+    assert_eq!(diff.path.as_ref(), Path::new("gone.txt"));
     assert_eq!(diff.hunks[0].lines[0].kind, LineKind::Removed);
 }
 
@@ -149,7 +209,7 @@ fn staged_rename_is_detected() {
     let diffs = diff_files(&repo.repo, DiffTarget::Staged, None).unwrap();
     assert_eq!(diffs.len(), 1);
     assert_eq!(diffs[0].status, FileStatus::Renamed);
-    assert_eq!(diffs[0].path, Path::new("new.txt"));
+    assert_eq!(diffs[0].path.as_ref(), Path::new("new.txt"));
     assert_eq!(diffs[0].old_path.as_deref(), Some(Path::new("old.txt")));
 }
 
@@ -161,7 +221,9 @@ fn binary_file_has_no_hunks() {
     repo.commit("add blob");
     std::fs::write(repo.path().join("blob.bin"), [0u8, 1, 2, 3, 0, 0, 9]).unwrap();
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("blob.bin")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("blob.bin"))
+        .unwrap()
+        .unwrap();
     assert!(diff.is_binary);
     assert!(diff.hunks.is_empty());
 }
@@ -172,7 +234,9 @@ fn missing_newline_at_eof_is_flagged() {
     repo.commit_file("a.txt", "one\ntwo", "add");
     repo.write("a.txt", "one\ntwo\nthree");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
     let lines = &diff.hunks[0].lines;
     assert!(lines.iter().any(|l| l.missing_newline), "{lines:#?}");
     assert!(lines.iter().all(|l| !l.content.ends_with('\n')));
@@ -186,15 +250,26 @@ fn only_the_requested_file_is_returned() {
     repo.write("a.txt", "A\n");
     repo.write("b.txt", "B\n");
 
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt")).unwrap().unwrap();
-    assert_eq!(diff.path, Path::new("a.txt"));
-    assert_eq!(diff_files(&repo.repo, DiffTarget::Unstaged, None).unwrap().len(), 2);
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(diff.path.as_ref(), Path::new("a.txt"));
+    assert_eq!(
+        diff_files(&repo.repo, DiffTarget::Unstaged, None)
+            .unwrap()
+            .len(),
+        2
+    );
 }
 
 #[test]
 fn unknown_path_returns_none() {
     let repo = TestRepo::with_initial_commit();
-    assert!(file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("nope.txt")).unwrap().is_none());
+    assert!(
+        file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("nope.txt"))
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -205,9 +280,14 @@ fn path_with_glob_characters_matches_literally() {
     repo.write("a[1].txt", "y\n");
     repo.write("a1.txt", "y\n");
 
-    let diffs = diff_files(&repo.repo, DiffTarget::Unstaged, Some(Path::new("a[1].txt"))).unwrap();
+    let diffs = diff_files(
+        &repo.repo,
+        DiffTarget::Unstaged,
+        Some(Path::new("a[1].txt")),
+    )
+    .unwrap();
     assert_eq!(diffs.len(), 1);
-    assert_eq!(diffs[0].path, Path::new("a[1].txt"));
+    assert_eq!(diffs[0].path.as_ref(), Path::new("a[1].txt"));
 }
 
 #[test]
@@ -215,7 +295,9 @@ fn diff_survives_json_round_trip() {
     let repo = TestRepo::init();
     repo.commit_file("a.txt", "a\n", "a");
     repo.write("a.txt", "b\n");
-    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt")).unwrap().unwrap();
+    let diff = file_diff(&repo.repo, DiffTarget::Unstaged, Path::new("a.txt"))
+        .unwrap()
+        .unwrap();
 
     let json = serde_json::to_string(&diff).unwrap();
     assert_eq!(serde_json::from_str::<FileDiff>(&json).unwrap(), diff);

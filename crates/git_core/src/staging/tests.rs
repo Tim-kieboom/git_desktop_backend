@@ -81,7 +81,11 @@ fn stage_modified_file() {
 
     stage(&repo.repo, Path::new("README.md")).unwrap();
     assert_eq!(state(&repo, "README.md"), (MODIFIED, None));
-    assert_eq!(read(&repo, "README.md"), "changed\n", "working tree untouched");
+    assert_eq!(
+        read(&repo, "README.md"),
+        "changed\n",
+        "working tree untouched"
+    );
 }
 
 #[test]
@@ -167,7 +171,11 @@ fn staging_a_file_deleted_after_it_was_staged_removes_it_from_the_index() {
     assert_eq!(state(&repo, "new.txt"), (ADDED, DELETED));
 
     stage(&repo.repo, Path::new("new.txt")).unwrap();
-    assert_eq!(state(&repo, "new.txt"), (None, None), "never existed in HEAD: no trace left");
+    assert_eq!(
+        state(&repo, "new.txt"),
+        (None, None),
+        "never existed in HEAD: no trace left"
+    );
 }
 
 #[test]
@@ -214,7 +222,10 @@ fn stage_unknown_path_is_path_not_found() {
     let repo = TestRepo::with_initial_commit();
 
     let err = stage(&repo.repo, Path::new("nope.txt")).unwrap_err();
-    assert!(matches!(err, GitError::PathNotFound(ref p) if p == Path::new("nope.txt")), "{err:?}");
+    assert!(
+        matches!(err, GitError::PathNotFound(ref p) if p == Path::new("nope.txt")),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -223,7 +234,11 @@ fn stage_directory_is_rejected() {
     repo.write("dir/a.txt", "a\n");
 
     assert!(stage(&repo.repo, Path::new("dir")).is_err());
-    assert_eq!(state(&repo, "dir/a.txt"), (None, UNTRACKED), "nothing was staged");
+    assert_eq!(
+        state(&repo, "dir/a.txt"),
+        (None, UNTRACKED),
+        "nothing was staged"
+    );
 }
 
 #[test]
@@ -245,7 +260,11 @@ fn stage_matches_the_path_literally_not_as_a_glob() {
 
     stage(&repo.repo, Path::new("a[1].txt")).unwrap();
     assert_eq!(state(&repo, "a[1].txt"), (MODIFIED, None));
-    assert_eq!(state(&repo, "a1.txt"), (None, MODIFIED), "a1.txt must not be staged");
+    assert_eq!(
+        state(&repo, "a1.txt"),
+        (None, MODIFIED),
+        "a1.txt must not be staged"
+    );
 }
 
 #[cfg(unix)]
@@ -383,7 +402,10 @@ fn unstage_unknown_path_is_path_not_found() {
     let repo = TestRepo::with_initial_commit();
 
     let err = unstage(&repo.repo, Path::new("nope.txt")).unwrap_err();
-    assert!(matches!(err, GitError::PathNotFound(ref p) if p == Path::new("nope.txt")), "{err:?}");
+    assert!(
+        matches!(err, GitError::PathNotFound(ref p) if p == Path::new("nope.txt")),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -393,7 +415,11 @@ fn unstage_directory_is_rejected() {
     stage(&repo.repo, Path::new("dir/a.txt")).unwrap();
 
     assert!(unstage(&repo.repo, Path::new("dir")).is_err());
-    assert_eq!(state(&repo, "dir/a.txt"), (ADDED, None), "nothing was unstaged");
+    assert_eq!(
+        state(&repo, "dir/a.txt"),
+        (ADDED, None),
+        "nothing was unstaged"
+    );
 }
 
 #[test]
@@ -417,7 +443,11 @@ fn unstage_matches_the_path_literally_not_as_a_glob() {
 
     unstage(&repo.repo, Path::new("a[1].txt")).unwrap();
     assert_eq!(state(&repo, "a[1].txt"), (None, MODIFIED));
-    assert_eq!(state(&repo, "a1.txt"), (MODIFIED, None), "a1.txt must stay staged");
+    assert_eq!(
+        state(&repo, "a1.txt"),
+        (MODIFIED, None),
+        "a1.txt must stay staged"
+    );
 }
 
 #[cfg(unix)]

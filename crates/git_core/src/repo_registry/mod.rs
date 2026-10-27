@@ -7,6 +7,7 @@ use vecmap::{ids::IdGenerator, impl_ids};
 
 use crate::error::GitError;
 use crate::repo_registry::storage::{RepoStorage, RepoStore, StoreError};
+use crate::{CoreError, CoreResult};
 
 pub mod storage;
 #[cfg(test)]
@@ -20,7 +21,7 @@ pub struct RepoRegistry<S: RepoStorage> {
 }
 impl<S: RepoStorage> RepoRegistry<S> {
     /// Creates a registry on top of `S`'s default storage location.
-    pub fn new() -> Result<Self, RepoError> {
+    pub fn new() -> CoreResult<Self> {
         let storage = S::new().map_err(RepoError::Store)?;
         Ok(Self { storage })
     }
@@ -38,11 +39,11 @@ impl<S: RepoStorage> RepoRegistry<S> {
     /// - [`StoreError::Io`] if `path` doesn't exist
     /// - [`RepoError::Git`] if `path` is not a git repository
     /// - [`StoreError::DuplicatePath`] / [`StoreError::DuplicateName`] if the path or name is taken
-    pub fn add(
-        &self,
-        path: impl Into<PathBuf>,
-        name: impl Into<RepoName>,
-    ) -> Result<(), RepoError> {
+    pub fn add(&self, path: impl Into<PathBuf>, name: impl Into<RepoName>) -> CoreResult {
+        self.inner_add(path, name).map_err(CoreError::Repo)
+    }
+
+    fn inner_add(&self, path: impl Into<PathBuf>, name: impl Into<RepoName>) -> RepoResult {
         let name = name.into();
         let path = path.into().canonicalize().map_err(StoreError::io)?;
 
@@ -67,31 +68,38 @@ impl<S: RepoStorage> RepoRegistry<S> {
     /// Unregisters a repository. Returns `false` when `id` wasn't registered.
     ///
     /// Only the registry entry is removed; nothing on disk is touched.
-    pub fn remove(&self, id: RepoId) -> Result<bool, RepoError> {
+    pub fn remove(&self, id: RepoId) -> CoreResult<bool> {
         let mut is_removed = false;
-        self.storage.update(|store| {
-            is_removed = store.entries.remove(id).is_some();
-            Ok(())
-        })?;
+        self.storage
+            .update(|store| {
+                is_removed = store.entries.remove(id).is_some();
+                Ok(())
+            })
+            .map_err(RepoError::from)?;
         Ok(is_removed)
     }
 
     /// Looks up a repository by id.
-    pub fn get(&self, id: RepoId) -> Result<Option<RepoEntry>, RepoError> {
-        let store = self.storage.load()?;
+    pub fn get(&self, id: RepoId) -> CoreResult<Option<RepoEntry>> {
+        let store = self.storage.load().map_err(RepoError::from)?;
         Ok(store.entries.get(id).cloned())
     }
 
     /// Looks up a repository by path (canonicalized first, so `path` must exist).
-    pub fn find(&self, path: &Path) -> Result<Option<RepoEntry>, RepoError> {
-        let path = path.canonicalize().map_err(StoreError::io)?;
+    pub fn find(&self, path: &Path) -> CoreResult<Option<RepoEntry>> {
+        self.inner_find(path).map_err(CoreError::Repo)
+    }
+
+    fn inner_find(&self, path: &Path) -> RepoResult<Option<RepoEntry>> {
+        let path = path.canonicalize().map_err(|e| StoreError::io(e))?;
+
         let store = self.storage.load()?;
         Ok(self.find_by_path(&store, &path).cloned())
     }
 
     /// Snapshot of all registered repositories.
-    pub fn list(&self) -> Result<RepoStore, RepoError> {
-        self.storage.load().map_err(RepoError::Store)
+    pub fn list(&self) -> CoreResult<RepoStore> {
+        self.storage.load().map_err(|e| RepoError::Store(e).into())
     }
 
     fn check_if_real_git_repo(path: &Path) -> Result<(), git2::Error> {
@@ -134,7 +142,7 @@ pub struct RepoEntry {
 }
 impl RepoEntry {
     /// Creates an entry with a fresh id from `alloc`, stamped with the current time.
-    pub fn new(alloc: &mut IdGenerator<RepoId>, name: RepoName, path: PathBuf) -> Self {
+    fn new(alloc: &mut IdGenerator<RepoId>, name: RepoName, path: PathBuf) -> Self {
         Self {
             name,
             path,
@@ -143,6 +151,8 @@ impl RepoEntry {
         }
     }
 }
+
+type RepoResult<T = ()> = Result<T, RepoError>;
 
 /// Errors from [`RepoRegistry`] operations.
 #[derive(Debug, Clone, Error)]

@@ -4,13 +4,12 @@
 
 use git2::{Delta, DiffOptions, Patch, Repository};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::GitError;
 
 #[cfg(test)]
 mod tests;
-
 /// Which two states of the repository are compared.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -87,9 +86,9 @@ pub struct Hunk {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileDiff {
     /// Current path (the old path for deleted files).
-    pub path: PathBuf,
+    pub path: Box<Path>,
     /// Previous path for renames and copies.
-    pub old_path: Option<PathBuf>,
+    pub old_path: Option<Box<Path>>,
     /// How the file changed.
     pub status: FileStatus,
     /// Binary files have no hunks; only the status is meaningful.
@@ -174,10 +173,11 @@ fn convert_patch(patch: &mut Patch<'_>) -> Result<FileDiff, GitError> {
         _ => new_path.or(old_path),
     }
     .map(Path::to_path_buf)
-    .unwrap_or_default();
+    .unwrap_or_default()
+    .into();
 
     let old_path = matches!(status, FileStatus::Renamed | FileStatus::Copied)
-        .then(|| old_path.map(Path::to_path_buf))
+        .then(|| old_path.map(|p| Path::to_path_buf(p).into()))
         .flatten();
 
     let is_binary = delta.flags().is_binary();

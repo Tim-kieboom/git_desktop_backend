@@ -1,6 +1,6 @@
 //! Working tree status: which files changed and whether the change is staged.
 
-use crate::error::GitError;
+use crate::error::GitResult;
 use git2::{Repository, StatusOptions};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,7 +27,7 @@ pub enum ChangeKind {
 /// Status of every changed file, sorted by path; empty when the working tree is clean.
 ///
 /// Ignored files are left out, untracked directories are expanded to their files.
-pub fn status(repo: &Repository) -> Result<Vec<StatusEntry>, GitError> {
+pub fn status(repo: &Repository) -> GitResult<Vec<StatusEntry>> {
     let mut options = StatusOptions::new();
     options
         .include_untracked(true)
@@ -56,7 +56,7 @@ pub struct StatusEntry {
     pub conflicted: bool,
 }
 impl StatusEntry {
-    pub fn new(entry: git2::StatusEntry<'_>) -> Self {
+    fn new(entry: git2::StatusEntry<'_>) -> Self {
         let status = entry.status();
         let is_rename = status.contains(git2::Status::INDEX_RENAMED);
         let conflicted = status.contains(git2::Status::CONFLICTED);

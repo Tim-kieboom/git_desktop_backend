@@ -3,7 +3,7 @@
 //! Paths are relative to the working directory, name one file (not a directory) and are matched
 //! literally, not as globs.
 
-use crate::error::GitError;
+use crate::error::GitResult;
 use git2::Repository;
 use std::path::Path;
 
@@ -18,7 +18,7 @@ mod tests;
 /// # Errors
 /// - [`GitError::PathNotFound`] if `path` is not in `HEAD`, the index or the working tree
 /// - [`GitError`] if `path` is absolute or a directory
-pub fn stage(_repo: &Repository, _path: &Path) -> Result<(), GitError> {
+pub fn stage(_repo: &Repository, _path: &Path) -> GitResult {
     todo!("implement stage")
 }
 
@@ -30,6 +30,6 @@ pub fn stage(_repo: &Repository, _path: &Path) -> Result<(), GitError> {
 /// # Errors
 /// - [`GitError::PathNotFound`] if `path` is not in `HEAD`, the index or the working tree
 /// - [`GitError`] if `path` is absolute or a directory
-pub fn unstage(_repo: &Repository, _path: &Path) -> Result<(), GitError> {
+pub fn unstage(_repo: &Repository, _path: &Path) -> GitResult {
     todo!("implement unstage")
 }

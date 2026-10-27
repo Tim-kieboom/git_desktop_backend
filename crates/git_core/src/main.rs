@@ -1,4 +1,4 @@
-use git_core::repo_registry::{RepoError, RepoRegistry, storage::memory_storage::MemoryStorage};
+use git_core::{CoreResult, RepoRegistry, storage::memory_storage::MemoryStorage};
 
 fn main() {
     if let Err(err) = run() {
@@ -6,7 +6,7 @@ fn main() {
     }
 }
 
-fn run() -> Result<(), RepoError> {
+fn run() -> CoreResult {
     let register = RepoRegistry::<MemoryStorage>::new()?;
     register.add("./", "this")?;
     register.add("../../TerminalCode", "trcode")?;

@@ -33,7 +33,7 @@ fn add_non_git_directory_fails() {
     let dir = plain_dir();
 
     let err = reg.add(dir.path(), "x").unwrap_err();
-    assert!(matches!(err, RepoError::Git(_)));
+    assert!(matches!(err, CoreError::Repo(RepoError::Git(_))));
     assert_eq!(reg.list().unwrap().entries.values().count(), 0);
 }
 
@@ -44,7 +44,10 @@ fn add_duplicate_path_fails() {
     reg.add(repo.path(), "a").unwrap();
 
     let err = reg.add(repo.path(), "b").unwrap_err();
-    assert!(matches!(err, RepoError::Store(StoreError::DuplicatePath(_))));
+    assert!(matches!(
+        err,
+        CoreError::Repo(RepoError::Store(StoreError::DuplicatePath(_)))
+    ));
     assert_eq!(reg.list().unwrap().entries.values().count(), 1);
 }
 
@@ -55,7 +58,10 @@ fn add_duplicate_name_fails() {
     reg.add(a.path(), "same").unwrap();
 
     let err = reg.add(b.path(), "same").unwrap_err();
-    assert!(matches!(err, RepoError::Store(StoreError::DuplicateName(_))));
+    assert!(matches!(
+        err,
+        CoreError::Repo(RepoError::Store(StoreError::DuplicateName(_)))
+    ));
 }
 
 #[test]
@@ -65,14 +71,20 @@ fn add_equivalent_path_spellings_are_duplicates() {
     reg.add(repo.path(), "a").unwrap();
 
     let err = reg.add(repo.path().join("."), "b").unwrap_err();
-    assert!(matches!(err, RepoError::Store(StoreError::DuplicatePath(_))));
+    assert!(matches!(
+        err,
+        CoreError::Repo(RepoError::Store(StoreError::DuplicatePath(_)))
+    ));
 }
 
 #[test]
 fn add_missing_path_fails() {
     let reg = registry();
     let err = reg.add("/definitely/not/a/real/path", "x").unwrap_err();
-    assert!(matches!(err, RepoError::Store(StoreError::Io(_))));
+    assert!(matches!(
+        err,
+        CoreError::Repo(RepoError::Store(StoreError::Io(_)))
+    ));
 }
 
 #[test]

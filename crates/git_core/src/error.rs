@@ -3,6 +3,19 @@
 use std::{path::PathBuf, sync::Arc};
 use thiserror::Error;
 
+use crate::repo_registry::RepoError;
+
+pub type CoreResult<T = ()> = Result<T, CoreError>;
+pub type GitResult<T = ()> = Result<T, GitError>;
+
+#[derive(Debug, Clone, Error)]
+pub enum CoreError {
+    #[error("{0}")]
+    Repo(#[from] RepoError),
+    #[error("{0}")]
+    Git(#[from] GitError),
+}
+
 /// Why a git operation on a repository failed.
 ///
 /// Cheap to clone: the libgit2 error is shared.
