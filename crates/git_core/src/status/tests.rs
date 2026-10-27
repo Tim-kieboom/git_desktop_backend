@@ -4,7 +4,7 @@
 //!
 //! ```ignore
 //! /// Working tree status: one entry per changed file, sorted by path. Clean repo => empty vec.
-//! pub fn status(repo: &git2::Repository) -> Result<Vec<StatusEntry>, StatusError>;
+//! pub fn status(repo: &git2::Repository) -> Result<Vec<StatusEntry>, GitError>;
 //!
 //! #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 //! pub struct StatusEntry {
@@ -19,14 +19,11 @@
 //! pub enum ChangeKind { Added, Modified, Deleted, Renamed, Untracked }
 //! //   Untracked is only ever used for `unstaged`.
 //!
-//! #[derive(Debug, Error)]
-//! pub enum StatusError { Git2(#[from] git2::Error) }
 //! ```
 //!
 //! Wire it up with `pub mod status;` in `lib.rs` and `#[cfg(test)] mod tests;` in `status/mod.rs`.
 use super::*;
 use crate::test_utils::TestRepo;
-use git2::{BranchType, build::CheckoutBuilder};
 use std::path::{Path, PathBuf};
 
 fn numbered(n: u32) -> String {
@@ -54,33 +51,6 @@ fn entry(repo: &TestRepo, path: &str) -> StatusEntry {
         .find(|e| *e.path == *Path::new(path))
         .unwrap_or_else(|| panic!("no entry for {path} in {all:#?}"))
         .clone()
-}
-
-/// Leaves `c.txt` in an unresolved merge conflict (feature branch merged into the default branch).
-fn make_conflict(repo: &TestRepo) {
-    repo.commit_file("c.txt", "base\n", "base");
-    let head = repo.repo.head().unwrap();
-    let default_branch = head.shorthand().unwrap().to_owned();
-    let base = head.peel_to_commit().unwrap();
-
-    repo.repo.branch("feature", &base, false).unwrap();
-    repo.commit_file("c.txt", "default branch change\n", "change on default");
-
-    repo.repo.set_head("refs/heads/feature").unwrap();
-    repo.repo
-        .checkout_head(Some(CheckoutBuilder::new().force()))
-        .unwrap();
-    repo.commit_file("c.txt", "feature change\n", "change on feature");
-
-    let theirs = repo
-        .repo
-        .find_branch(&default_branch, BranchType::Local)
-        .unwrap()
-        .get()
-        .peel_to_commit()
-        .unwrap();
-    let annotated = repo.repo.find_annotated_commit(theirs.id()).unwrap();
-    repo.repo.merge(&[&annotated], None, None).unwrap();
 }
 
 // ---------------------------------------------------------------- clean / empty
@@ -273,7 +243,7 @@ fn staged_new_file_deleted_afterwards_is_added_and_deleted() {
 #[test]
 fn merge_conflict_is_flagged_as_conflicted() {
     let repo = TestRepo::init();
-    make_conflict(&repo);
+    repo.make_conflict();
 
     let e = entry(&repo, "c.txt");
     assert!(e.conflicted, "{e:#?}");
@@ -283,7 +253,7 @@ fn merge_conflict_is_flagged_as_conflicted() {
 fn non_conflicted_files_are_not_flagged_during_a_conflict() {
     let repo = TestRepo::init();
     repo.commit_file("other.txt", "o\n", "other");
-    make_conflict(&repo);
+    repo.make_conflict();
     repo.write("untouched.txt", "u\n");
 
     assert!(!entry(&repo, "untouched.txt").conflicted);

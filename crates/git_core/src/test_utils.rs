@@ -87,6 +87,34 @@ impl TestRepo {
         self.commit(message)
     }
 
+    /// Leaves `c.txt` in an unresolved merge conflict: a `feature` branch is merged into the
+    /// default branch, and both changed the same line. Needs a repo without a `c.txt`.
+    pub fn make_conflict(&self) {
+        self.commit_file("c.txt", "base\n", "base");
+        let head = self.repo.head().unwrap();
+        let default_branch = head.shorthand().unwrap().to_owned();
+        let base = head.peel_to_commit().unwrap();
+
+        self.repo.branch("feature", &base, false).unwrap();
+        self.commit_file("c.txt", "default branch change\n", "change on default");
+
+        self.repo.set_head("refs/heads/feature").unwrap();
+        self.repo
+            .checkout_head(Some(git2::build::CheckoutBuilder::new().force()))
+            .unwrap();
+        self.commit_file("c.txt", "feature change\n", "change on feature");
+
+        let theirs = self
+            .repo
+            .find_branch(&default_branch, git2::BranchType::Local)
+            .unwrap()
+            .get()
+            .peel_to_commit()
+            .unwrap();
+        let annotated = self.repo.find_annotated_commit(theirs.id()).unwrap();
+        self.repo.merge(&[&annotated], None, None).unwrap();
+    }
+
     /// Lightweight tag on `HEAD`.
     pub fn tag(&self, name: &str) {
         let head = self.repo.head().unwrap().peel_to_commit().unwrap();

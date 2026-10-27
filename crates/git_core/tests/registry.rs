@@ -58,7 +58,7 @@ fn non_git_directory_is_rejected_and_not_persisted() {
     let not_a_repo = plain_dir();
 
     let err = registry(data.path()).add(not_a_repo.path(), "x").unwrap_err();
-    assert!(matches!(err, RepoError::Git2(_)));
+    assert!(matches!(err, RepoError::Git(_)));
     assert_eq!(registry(data.path()).list().unwrap().entries.values().count(), 0);
 }
 

@@ -33,7 +33,7 @@ fn add_non_git_directory_fails() {
     let dir = plain_dir();
 
     let err = reg.add(dir.path(), "x").unwrap_err();
-    assert!(matches!(err, RepoError::Git2(_)));
+    assert!(matches!(err, RepoError::Git(_)));
     assert_eq!(reg.list().unwrap().entries.values().count(), 0);
 }
 

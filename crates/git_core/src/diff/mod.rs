@@ -5,7 +5,8 @@
 use git2::{Delta, DiffOptions, Patch, Repository};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use thiserror::Error;
+
+use crate::error::GitError;
 
 #[cfg(test)]
 mod tests;
@@ -99,14 +100,6 @@ pub struct FileDiff {
     pub patch: String,
 }
 
-/// Errors from computing a diff.
-#[derive(Debug, Error)]
-pub enum DiffError {
-    /// libgit2 failed (corrupt repository, unreadable file, ...).
-    #[error("{0}")]
-    Git2(#[from] git2::Error),
-}
-
 /// Diff of one file, or `None` when that file has no changes for `target`.
 ///
 /// `path` is relative to the working directory and matched literally (no globbing).
@@ -114,7 +107,7 @@ pub fn file_diff(
     repo: &Repository,
     target: DiffTarget,
     path: &Path,
-) -> Result<Option<FileDiff>, DiffError> {
+) -> Result<Option<FileDiff>, GitError> {
     Ok(diff_files(repo, target, Some(path))?.into_iter().next())
 }
 
@@ -126,7 +119,7 @@ pub fn diff_files(
     repo: &Repository,
     target: DiffTarget,
     path: Option<&Path>,
-) -> Result<Vec<FileDiff>, DiffError> {
+) -> Result<Vec<FileDiff>, GitError> {
     let mut options = DiffOptions::new();
     if let Some(path) = path {
         // literal match: file names may contain glob characters like `[` or `*`
@@ -164,7 +157,7 @@ pub fn diff_files(
     Ok(files)
 }
 
-fn convert_patch(patch: &mut Patch<'_>) -> Result<FileDiff, DiffError> {
+fn convert_patch(patch: &mut Patch<'_>) -> Result<FileDiff, GitError> {
     let delta = patch.delta();
     let status = match delta.status() {
         Delta::Added | Delta::Untracked => FileStatus::Added,

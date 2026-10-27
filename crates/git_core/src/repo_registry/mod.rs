@@ -1,13 +1,11 @@
 //! Registry of the local git repositories the app knows about.
 
 use chrono::{DateTime, Utc};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use vecmap::{ids::IdGenerator, impl_ids};
 
+use crate::error::GitError;
 use crate::repo_registry::storage::{RepoStorage, RepoStore, StoreError};
 
 pub mod storage;
@@ -38,7 +36,7 @@ impl<S: RepoStorage> RepoRegistry<S> {
     ///
     /// # Errors
     /// - [`StoreError::Io`] if `path` doesn't exist
-    /// - [`RepoError::Git2`] if `path` is not a git repository
+    /// - [`RepoError::Git`] if `path` is not a git repository
     /// - [`StoreError::DuplicatePath`] / [`StoreError::DuplicateName`] if the path or name is taken
     pub fn add(
         &self,
@@ -151,13 +149,13 @@ impl RepoEntry {
 pub enum RepoError {
     /// The path could not be opened as a git repository.
     #[error("{0}")]
-    Git2(Arc<git2::Error>),
+    Git(#[from] GitError),
     /// The underlying storage failed or rejected the change.
     #[error("{0}")]
     Store(#[from] storage::StoreError),
 }
 impl From<git2::Error> for RepoError {
     fn from(value: git2::Error) -> Self {
-        Self::Git2(Arc::new(value))
+        Self::Git(value.into())
     }
 }

@@ -1,5 +1,6 @@
 //! Working tree status: which files changed and whether the change is staged.
 
+use crate::error::GitError;
 use git2::{Repository, StatusOptions};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,7 +8,6 @@ use std::{
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
 };
-use thiserror::Error;
 
 #[cfg(test)]
 mod tests;
@@ -24,18 +24,10 @@ pub enum ChangeKind {
     Untracked,
 }
 
-/// Errors from computing the status.
-#[derive(Debug, Error)]
-pub enum StatusError {
-    /// libgit2 failed.
-    #[error("{0}")]
-    Git2(#[from] git2::Error),
-}
-
 /// Status of every changed file, sorted by path; empty when the working tree is clean.
 ///
 /// Ignored files are left out, untracked directories are expanded to their files.
-pub fn status(repo: &Repository) -> Result<Vec<StatusEntry>, StatusError> {
+pub fn status(repo: &Repository) -> Result<Vec<StatusEntry>, GitError> {
     let mut options = StatusOptions::new();
     options
         .include_untracked(true)
