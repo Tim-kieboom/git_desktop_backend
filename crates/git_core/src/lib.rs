@@ -1,5 +1,6 @@
 //! Host-agnostic git engine: a persistent registry of local repositories and file diffs and status.
 
+mod async_repo;
 mod branch;
 mod commit;
 mod commit_id;
@@ -14,11 +15,12 @@ mod tag;
 #[cfg(test)]
 mod tests;
 
+pub use async_repo::{AsyncRepository, RepoHub};
 pub use branch::{AheadBehind, BranchInfo, BranchKind};
 pub use commit_id::{CommitId, ParseCommitIdError};
 pub use diff::{DiffLine, DiffTarget, FileDiff, FileStatus, Hunk, LineKind};
-pub use log::{CommitDetail, CommitInfo, LogPage, LogQuery, Person};
 pub use error::{CoreError, CoreResult, GitError, GitResult};
+pub use log::{CommitDetail, CommitInfo, LogPage, LogQuery, Person};
 pub use repo_registry::*;
 pub use status::{ChangeKind, StatusEntry};
 pub use tag::TagInfo;
@@ -28,7 +30,12 @@ pub struct Repository {
 }
 impl Repository {
     pub fn from_repo_entry(entry: &RepoEntry) -> CoreResult<Self> {
-        git2::Repository::open(&entry.path)
+        Self::open(&entry.path)
+    }
+
+    /// Opens the git repository whose working directory (or `.git` directory) is `path`.
+    pub fn open(path: &std::path::Path) -> CoreResult<Self> {
+        git2::Repository::open(path)
             .map(|raw| Self { raw })
             .map_err(|e| GitError::from(e).into())
     }

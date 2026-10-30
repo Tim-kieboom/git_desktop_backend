@@ -14,6 +14,16 @@ pub enum CoreError {
     Repo(#[from] RepoError),
     #[error("{0}")]
     Git(#[from] GitError),
+    /// A background git task panicked or was cancelled before it finished.
+    #[error("git task failed: {0}")]
+    Task(String),
+    #[error("{0}")]
+    Io(Arc<std::io::Error>),
+}
+impl From<std::io::Error> for CoreError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Io(Arc::new(value))
+    }
 }
 
 /// Why a git operation on a repository failed.
