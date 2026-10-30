@@ -1,3 +1,4 @@
+mod async_repository;
 mod commit_id;
 mod repository;
 mod test_repo;

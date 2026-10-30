@@ -4,10 +4,8 @@
 use crate::tests::TestRepo;
 use crate::{CommitId, CoreError, DiffTarget, GitError, LogQuery};
 
-fn open(repo: &TestRepo) -> crate::Repository {
-    crate::Repository {
-        raw: git2::Repository::open(repo.path()).unwrap(),
-    }
+fn open(repo: &TestRepo) -> crate::repository::Repository {
+    crate::repository::Repository::open(repo.path()).unwrap()
 }
 
 #[test]
@@ -50,12 +48,20 @@ fn stage_hunk_then_commit_only_commits_that_hunk() {
     let wrapper = open(&repo);
     let path = std::path::Path::new("f.txt");
 
-    let hunks = wrapper.file_diff(DiffTarget::Unstaged, path).unwrap().unwrap().hunks;
+    let hunks = wrapper
+        .file_diff(DiffTarget::Unstaged, path)
+        .unwrap()
+        .unwrap()
+        .hunks;
     assert_eq!(hunks.len(), 2);
     wrapper.stage_hunk(path, &hunks[0]).unwrap();
     wrapper.commit("first change only").unwrap();
 
-    let rest = wrapper.file_diff(DiffTarget::Unstaged, path).unwrap().unwrap().hunks;
+    let rest = wrapper
+        .file_diff(DiffTarget::Unstaged, path)
+        .unwrap()
+        .unwrap()
+        .hunks;
     assert_eq!(rest.len(), 1, "the second change is still pending");
     assert!(rest[0].lines.iter().any(|l| l.content == "CHANGED 28"));
 }
@@ -69,10 +75,18 @@ fn unstage_hunk_through_the_wrapper() {
     let wrapper = open(&repo);
     let path = std::path::Path::new("f.txt");
 
-    let staged = wrapper.file_diff(DiffTarget::Staged, path).unwrap().unwrap().hunks;
+    let staged = wrapper
+        .file_diff(DiffTarget::Staged, path)
+        .unwrap()
+        .unwrap()
+        .hunks;
     wrapper.unstage_hunk(path, &staged[1]).unwrap();
 
-    let staged = wrapper.file_diff(DiffTarget::Staged, path).unwrap().unwrap().hunks;
+    let staged = wrapper
+        .file_diff(DiffTarget::Staged, path)
+        .unwrap()
+        .unwrap()
+        .hunks;
     assert_eq!(staged.len(), 1);
 }
 
@@ -83,11 +97,19 @@ fn stale_hunk_is_a_core_error() {
     repo.write("f.txt", &numbered(&[3]));
     let wrapper = open(&repo);
     let path = std::path::Path::new("f.txt");
-    let hunk = wrapper.file_diff(DiffTarget::Unstaged, path).unwrap().unwrap().hunks.remove(0);
+    let hunk = wrapper
+        .file_diff(DiffTarget::Unstaged, path)
+        .unwrap()
+        .unwrap()
+        .hunks
+        .remove(0);
     wrapper.stage_hunk(path, &hunk).unwrap();
 
     let err = wrapper.stage_hunk(path, &hunk).unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::HunkNotFound(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::HunkNotFound(_))),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -101,12 +123,17 @@ fn release_workflow_through_the_wrapper() {
     };
 
     let first = edit_and_commit("1\n", "feat: first");
-    wrapper.create_tag("v1.0.0", None, Some("Release 1.0.0")).unwrap();
+    wrapper
+        .create_tag("v1.0.0", None, Some("Release 1.0.0"))
+        .unwrap();
     edit_and_commit("2\n", "fix: second");
     edit_and_commit("3\n", "feat: third");
 
     // what changed since the release
-    let since = LogQuery { exclude: Some("v1.0.0".into()), ..LogQuery::default() };
+    let since = LogQuery {
+        exclude: Some("v1.0.0".into()),
+        ..LogQuery::default()
+    };
     let page = wrapper.log(&since).unwrap();
     let summaries: Vec<_> = page.commits.iter().map(|c| c.summary.as_str()).collect();
     assert_eq!(summaries, ["feat: third", "fix: second"]);
@@ -133,15 +160,32 @@ fn branch_workflow_through_the_wrapper() {
     wrapper.commit("work on feature").unwrap();
 
     let branches = wrapper.branches().unwrap();
-    assert!(branches.iter().find(|b| b.name == "feature").unwrap().is_head);
+    assert!(
+        branches
+            .iter()
+            .find(|b| b.name == "feature")
+            .unwrap()
+            .is_head
+    );
 
     let err = wrapper.delete_branch("feature", false).unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::CurrentBranch(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::CurrentBranch(_))),
+        "{err:?}"
+    );
 
-    let other = branches.iter().find(|b| b.name != "feature").unwrap().name.clone();
+    let other = branches
+        .iter()
+        .find(|b| b.name != "feature")
+        .unwrap()
+        .name
+        .clone();
     wrapper.checkout_branch(&other).unwrap();
     let err = wrapper.delete_branch("feature", false).unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::BranchNotMerged(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::BranchNotMerged(_))),
+        "{err:?}"
+    );
     wrapper.delete_branch("feature", true).unwrap();
     assert_eq!(wrapper.branches().unwrap().len(), 1);
 }
@@ -153,10 +197,16 @@ fn tag_errors_are_core_errors() {
     wrapper.create_tag("v1", None, None).unwrap();
 
     let err = wrapper.create_tag("v1", None, None).unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::TagAlreadyExists(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::TagAlreadyExists(_))),
+        "{err:?}"
+    );
     wrapper.delete_tag("v1").unwrap();
     let err = wrapper.delete_tag("v1").unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::TagNotFound(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::TagNotFound(_))),
+        "{err:?}"
+    );
 }
 
 #[test]
@@ -170,5 +220,8 @@ fn ahead_behind_through_the_wrapper() {
     let result = wrapper.ahead_behind("HEAD", "v1").unwrap();
     assert_eq!((result.ahead, result.behind), (2, 0));
     let err = wrapper.ahead_behind("HEAD", "nope").unwrap_err();
-    assert!(matches!(err, CoreError::Git(GitError::RevisionNotFound(_))), "{err:?}");
+    assert!(
+        matches!(err, CoreError::Git(GitError::RevisionNotFound(_))),
+        "{err:?}"
+    );
 }
