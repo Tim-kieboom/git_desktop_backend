@@ -46,6 +46,10 @@ pub enum GitError {
     /// The index still has merge conflicts; resolve and stage the conflicted files first.
     #[error("unresolved merge conflicts")]
     UnresolvedConflicts,
+    /// The hunk is not part of the file's current diff: the file changed after the diff was
+    /// taken, or the hunk was already staged / unstaged.
+    #[error("hunk not found in the current diff of {}", .0.display())]
+    HunkNotFound(PathBuf),
 }
 impl From<git2::Error> for GitError {
     fn from(value: git2::Error) -> Self {

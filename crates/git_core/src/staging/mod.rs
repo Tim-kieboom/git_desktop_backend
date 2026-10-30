@@ -7,8 +7,11 @@ use crate::error::{GitError, GitResult};
 use git2::{Index, ObjectType, Repository, Tree};
 use std::path::{Component, Path};
 
+mod hunk;
 #[cfg(test)]
 mod tests;
+
+pub use hunk::{stage_hunk, unstage_hunk};
 
 /// Stages the current state of `path`: a new file is added, a modified file is updated and a
 /// deleted file has its deletion staged. A merge conflict on `path` counts as resolved.

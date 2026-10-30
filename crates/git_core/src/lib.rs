@@ -56,6 +56,23 @@ impl Repository {
         staging::unstage(&self.raw, path).map_err(CoreError::from)
     }
 
+    /// Stages one hunk of the unstaged changes of `path`, like picking a hunk in `git add -p`.
+    ///
+    /// `hunk` must come from the current [`Repository::file_diff`] with [`DiffTarget::Unstaged`];
+    /// positions shift as hunks get staged, so fetch the diff again between calls. A hunk that is
+    /// no longer part of the diff gives [`GitError::HunkNotFound`] and changes nothing.
+    pub fn stage_hunk(&self, path: &std::path::Path, hunk: &Hunk) -> CoreResult {
+        staging::stage_hunk(&self.raw, path, hunk).map_err(CoreError::from)
+    }
+
+    /// Unstages one hunk of the staged changes of `path`, like `git restore -p --staged`.
+    ///
+    /// `hunk` must come from the current [`Repository::file_diff`] with [`DiffTarget::Staged`].
+    /// See [`Repository::stage_hunk`].
+    pub fn unstage_hunk(&self, path: &std::path::Path, hunk: &Hunk) -> CoreResult {
+        staging::unstage_hunk(&self.raw, path, hunk).map_err(CoreError::from)
+    }
+
     /// Commits what is staged and moves the current branch, like `git commit -m`.
     ///
     /// Returns the id of the new commit. See [`GitError`] for the ways this can fail: blank
