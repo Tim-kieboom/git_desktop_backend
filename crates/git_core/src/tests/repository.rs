@@ -158,3 +158,17 @@ fn tag_errors_are_core_errors() {
     let err = wrapper.delete_tag("v1").unwrap_err();
     assert!(matches!(err, CoreError::Git(GitError::TagNotFound(_))), "{err:?}");
 }
+
+#[test]
+fn ahead_behind_through_the_wrapper() {
+    let repo = TestRepo::with_initial_commit();
+    let wrapper = open(&repo);
+    wrapper.create_tag("v1", None, None).unwrap();
+    repo.commit_file("a.txt", "a\n", "one");
+    repo.commit_file("b.txt", "b\n", "two");
+
+    let result = wrapper.ahead_behind("HEAD", "v1").unwrap();
+    assert_eq!((result.ahead, result.behind), (2, 0));
+    let err = wrapper.ahead_behind("HEAD", "nope").unwrap_err();
+    assert!(matches!(err, CoreError::Git(GitError::RevisionNotFound(_))), "{err:?}");
+}

@@ -14,7 +14,7 @@ mod tag;
 #[cfg(test)]
 mod tests;
 
-pub use branch::{BranchInfo, BranchKind};
+pub use branch::{AheadBehind, BranchInfo, BranchKind};
 pub use commit_id::{CommitId, ParseCommitIdError};
 pub use diff::{DiffLine, DiffTarget, FileDiff, FileStatus, Hunk, LineKind};
 pub use log::{CommitDetail, CommitInfo, LogPage, LogQuery, Person};
@@ -105,6 +105,12 @@ impl Repository {
     /// Local branches followed by remote ones, each sorted by name.
     pub fn branches(&self) -> CoreResult<Vec<BranchInfo>> {
         branch::list_branches(&self.raw).map_err(CoreError::from)
+    }
+
+    /// How many commits `local` has that `upstream` lacks and vice versa, for any two revisions.
+    /// A branch's own comparison with its upstream is in [`BranchInfo::ahead_behind`].
+    pub fn ahead_behind(&self, local: &str, upstream: &str) -> CoreResult<AheadBehind> {
+        branch::ahead_behind(&self.raw, local, upstream).map_err(CoreError::from)
     }
 
     /// Creates a local branch at `start` (a revision, `HEAD` when `None`) without checking it out.

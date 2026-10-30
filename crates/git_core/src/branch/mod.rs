@@ -19,6 +19,15 @@ pub enum BranchKind {
     Remote,
 }
 
+/// How far two lines of history have moved apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AheadBehind {
+    /// Commits that are in the first revision but not in the second.
+    pub ahead: usize,
+    /// Commits that are in the second revision but not in the first.
+    pub behind: usize,
+}
+
 /// A branch and where it points.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BranchInfo {
@@ -31,6 +40,8 @@ pub struct BranchInfo {
     pub target: CommitId,
     /// The branch this one tracks (`origin/main`), if it has an upstream.
     pub upstream: Option<String>,
+    /// How this branch compares to its upstream; `None` when it has no (valid) upstream.
+    pub ahead_behind: Option<AheadBehind>,
 }
 
 /// All local branches (sorted by name) followed by all remote branches (sorted by name).
@@ -45,7 +56,7 @@ pub fn list_branches(repo: &Repository) -> GitResult<Vec<BranchInfo>> {
             BranchType::Remote => BranchKind::Remote,
         };
 
-        let Some(info) = branch_info(&branch, kind)? else {
+        let Some(info) = branch_info(repo, &branch, kind)? else {
             continue;
         };
         // `origin/HEAD` is a pointer to the remote's default branch, not a branch of its own
@@ -59,6 +70,22 @@ pub fn list_branches(repo: &Repository) -> GitResult<Vec<BranchInfo>> {
         (a.kind == BranchKind::Remote, &a.name).cmp(&(b.kind == BranchKind::Remote, &b.name))
     });
     Ok(branches)
+}
+
+/// Compares two revisions: how many commits `local` has that `upstream` lacks (`ahead`) and the
+/// other way around (`behind`), like `git rev-list --left-right --count local...upstream`.
+///
+/// Both are counted from the merge base, so diverged histories report both numbers, and
+/// histories without a common ancestor count all of their commits. Merge commits and the commits
+/// of merged branches are counted like any other.
+///
+/// # Errors
+/// - [`GitError::RevisionNotFound`] if either revision isn't a commit
+pub fn ahead_behind(repo: &Repository, local: &str, upstream: &str) -> GitResult<AheadBehind> {
+    let local = resolve_commit(repo, local)?;
+    let upstream = resolve_commit(repo, upstream)?;
+    let (ahead, behind) = repo.graph_ahead_behind(local.id(), upstream.id())?;
+    Ok(AheadBehind { ahead, behind })
 }
 
 /// Creates a local branch at `start` (a revision; `HEAD` when `None`) without checking it out.
@@ -77,7 +104,7 @@ pub fn create_branch(repo: &Repository, name: &str, start: Option<&str>) -> GitR
         ErrorCode::Exists => GitError::BranchAlreadyExists(name.to_owned()),
         _ => err.into(),
     })?;
-    Ok(branch_info(&branch, BranchKind::Local)?.expect("a branch we just made has a valid name"))
+    Ok(branch_info(repo, &branch, BranchKind::Local)?.expect("a branch we just made has a valid name"))
 }
 
 /// Switches to the local branch `name`: moves `HEAD` and updates the working tree.
@@ -142,24 +169,35 @@ fn find_local<'r>(repo: &'r Repository, name: &str) -> GitResult<Branch<'r>> {
     })
 }
 
-fn branch_info(branch: &Branch<'_>, kind: BranchKind) -> GitResult<Option<BranchInfo>> {
+fn branch_info(
+    repo: &Repository,
+    branch: &Branch<'_>,
+    kind: BranchKind,
+) -> GitResult<Option<BranchInfo>> {
     let Ok(Some(name)) = branch.name() else {
         return Ok(None); // not valid utf-8
     };
 
-    let upstream = match kind {
-        BranchKind::Local => branch
-            .upstream()
-            .ok()
-            .and_then(|up| up.name().ok().flatten().map(str::to_owned)),
-        BranchKind::Remote => None,
-    };
+    let target = branch.get().peel_to_commit()?.id();
+
+    // a configured upstream whose branch is gone is treated as no upstream
+    let (mut upstream, mut ahead_behind) = (None, None);
+    if kind == BranchKind::Local {
+        if let Ok(up) = branch.upstream() {
+            upstream = up.name().ok().flatten().map(str::to_owned);
+            if let Ok(up_commit) = up.get().peel_to_commit() {
+                let (ahead, behind) = repo.graph_ahead_behind(target, up_commit.id())?;
+                ahead_behind = Some(AheadBehind { ahead, behind });
+            }
+        }
+    }
 
     Ok(Some(BranchInfo {
         name: name.to_owned(),
         kind,
         is_head: kind == BranchKind::Local && branch.is_head(),
-        target: CommitId::from_oid(branch.get().peel_to_commit()?.id()),
+        target: CommitId::from_oid(target),
         upstream,
+        ahead_behind,
     }))
 }

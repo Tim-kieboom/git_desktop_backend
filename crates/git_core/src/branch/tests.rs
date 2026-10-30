@@ -9,6 +9,8 @@
 //! - `checkout_branch` moves `HEAD` and the working tree. Uncommitted changes that don't clash
 //!   with the switch come along; clashing ones give `WouldOverwriteChanges` and change nothing.
 //! - `delete_branch` refuses the checked-out branch, and unmerged ones unless forced.
+//! - `ahead_behind` counts the commits each of two revisions has that the other lacks;
+//!   `BranchInfo::ahead_behind` is that comparison between a branch and its upstream.
 use super::*;
 use crate::tests::TestRepo;
 use git2::Oid;
@@ -418,4 +420,211 @@ fn json_round_trip() {
     let json = serde_json::to_string(&branches).unwrap();
     assert_eq!(serde_json::from_str::<Vec<BranchInfo>>(&json).unwrap(), branches);
     assert!(json.contains("\"kind\":\"local\""), "{json}");
+}
+
+// ============================================================================ ahead / behind
+
+fn counts(repo: &TestRepo, local: &str, upstream: &str) -> (usize, usize) {
+    let result = ahead_behind(&repo.repo, local, upstream).unwrap();
+    (result.ahead, result.behind)
+}
+
+/// `main` (the default branch) has 2 commits that `up` lacks, `up` has 3 that `main` lacks.
+fn diverged() -> (TestRepo, String) {
+    let repo = TestRepo::with_initial_commit();
+    let main = current(&repo);
+    create_branch(&repo.repo, "up", None).unwrap();
+
+    checkout_branch(&repo.repo, "up").unwrap();
+    for i in 1..=3 {
+        repo.commit_file(&format!("up{i}.txt"), "x\n", &format!("up {i}"));
+    }
+    checkout_branch(&repo.repo, &main).unwrap();
+    for i in 1..=2 {
+        repo.commit_file(&format!("main{i}.txt"), "x\n", &format!("main {i}"));
+    }
+    (repo, main)
+}
+
+#[test]
+fn the_same_commit_is_neither_ahead_nor_behind() {
+    let repo = TestRepo::with_initial_commit();
+    assert_eq!(counts(&repo, "HEAD", "HEAD"), (0, 0));
+    create_branch(&repo.repo, "same", None).unwrap();
+    assert_eq!(counts(&repo, "same", "HEAD"), (0, 0));
+}
+
+#[test]
+fn commits_on_top_make_a_branch_ahead() {
+    let repo = TestRepo::with_initial_commit();
+    create_branch(&repo.repo, "old", None).unwrap();
+    for i in 1..=3 {
+        repo.commit_file(&format!("f{i}.txt"), "x\n", &format!("c{i}"));
+    }
+
+    assert_eq!(counts(&repo, "HEAD", "old"), (3, 0));
+    assert_eq!(counts(&repo, "old", "HEAD"), (0, 3), "and the other way around: behind");
+}
+
+#[test]
+fn diverged_branches_are_both_ahead_and_behind() {
+    let (repo, main) = diverged();
+    assert_eq!(counts(&repo, &main, "up"), (2, 3));
+    assert_eq!(counts(&repo, "up", &main), (3, 2));
+}
+
+#[test]
+fn revisions_can_be_branches_tags_ids_and_relative_names() {
+    let repo = TestRepo::with_initial_commit();
+    let first = head(&repo);
+    repo.tag("v1");
+    repo.commit_file("a.txt", "a\n", "second");
+    repo.commit_file("b.txt", "b\n", "third");
+
+    for old in ["v1", &first.to_string(), "HEAD~2", "HEAD~2^{commit}"] {
+        assert_eq!(counts(&repo, "HEAD", old), (2, 0), "{old}");
+    }
+    assert_eq!(counts(&repo, "HEAD~1", "HEAD"), (0, 1));
+}
+
+#[test]
+fn merged_branches_count_their_commits_and_the_merge() {
+    let repo = TestRepo::with_initial_commit();
+    let base = head(&repo);
+    let main = current(&repo);
+    create_branch(&repo.repo, "side", None).unwrap();
+    checkout_branch(&repo.repo, "side").unwrap();
+    repo.commit_file("s1.txt", "x\n", "side 1");
+    let side = repo.commit_file("s2.txt", "x\n", "side 2");
+    checkout_branch(&repo.repo, &main).unwrap();
+    repo.commit_file("m1.txt", "x\n", "main 1");
+    // merge commit: parents are HEAD and the side branch, tree keeps HEAD's
+    let head_commit = repo.repo.head().unwrap().peel_to_commit().unwrap();
+    let side_commit = repo.repo.find_commit(side).unwrap();
+    let sig = git2::Signature::now("Test User", "test@example.com").unwrap();
+    repo.repo
+        .commit(Some("HEAD"), &sig, &sig, "merge", &head_commit.tree().unwrap(), &[&head_commit, &side_commit])
+        .unwrap();
+
+    // main 1, side 1, side 2 and the merge commit itself
+    assert_eq!(counts(&repo, "HEAD", &base.to_string()), (4, 0));
+    assert_eq!(counts(&repo, "HEAD", "side"), (2, 0), "main 1 and the merge");
+    assert_eq!(counts(&repo, "side", "HEAD"), (0, 2));
+}
+
+#[test]
+fn histories_without_a_common_ancestor_count_everything() {
+    let repo = TestRepo::with_initial_commit();
+    repo.commit_file("a.txt", "a\n", "second"); // 2 commits on HEAD
+    let sig = git2::Signature::now("Test User", "test@example.com").unwrap();
+    let empty = repo.repo.find_tree(repo.repo.treebuilder(None).unwrap().write().unwrap()).unwrap();
+    repo.repo.commit(Some("refs/heads/orphan"), &sig, &sig, "unrelated root", &empty, &[]).unwrap();
+
+    assert_eq!(counts(&repo, "HEAD", "orphan"), (2, 1));
+    assert_eq!(counts(&repo, "orphan", "HEAD"), (1, 2));
+}
+
+#[test]
+fn ahead_behind_with_an_unknown_revision_fails() {
+    let repo = TestRepo::with_initial_commit();
+    for (local, upstream) in [("nope", "HEAD"), ("HEAD", "nope"), ("nope", "nope"), ("HEAD", "")] {
+        let err = ahead_behind(&repo.repo, local, upstream).unwrap_err();
+        assert!(matches!(err, GitError::RevisionNotFound(_)), "{local} {upstream}: {err:?}");
+    }
+}
+
+#[test]
+fn ahead_behind_in_a_repository_without_commits_fails() {
+    let repo = TestRepo::init();
+    let err = ahead_behind(&repo.repo, "HEAD", "HEAD").unwrap_err();
+    assert!(matches!(err, GitError::RevisionNotFound(_)), "{err:?}");
+}
+
+#[test]
+fn ahead_behind_survives_a_json_round_trip() {
+    let value = AheadBehind { ahead: 2, behind: 5 };
+    let json = serde_json::to_string(&value).unwrap();
+    assert_eq!(json, r#"{"ahead":2,"behind":5}"#);
+    assert_eq!(serde_json::from_str::<AheadBehind>(&json).unwrap(), value);
+}
+
+// ------------------------------------------------------------------ BranchInfo::ahead_behind
+
+fn info(repo: &TestRepo, name: &str) -> BranchInfo {
+    list_branches(&repo.repo).unwrap().into_iter().find(|b| b.name == name).expect(name)
+}
+
+fn track(repo: &TestRepo, branch: &str, upstream: &str) {
+    repo.repo.find_branch(branch, git2::BranchType::Local).unwrap().set_upstream(Some(upstream)).unwrap();
+}
+
+#[test]
+fn a_branch_without_an_upstream_has_no_comparison() {
+    let repo = TestRepo::with_initial_commit();
+    assert_eq!(info(&repo, &current(&repo)).ahead_behind, None);
+}
+
+#[test]
+fn a_branch_level_with_its_upstream_is_zero_zero() {
+    let repo = TestRepo::with_initial_commit();
+    create_branch(&repo.repo, "feature", None).unwrap();
+    track(&repo, "feature", &current(&repo));
+
+    assert_eq!(info(&repo, "feature").ahead_behind, Some(AheadBehind { ahead: 0, behind: 0 }));
+}
+
+#[test]
+fn branch_info_compares_with_a_local_upstream() {
+    let (repo, main) = diverged();
+    track(&repo, &main, "up");
+
+    let branch = info(&repo, &main);
+    assert_eq!(branch.upstream.as_deref(), Some("up"));
+    assert_eq!(branch.ahead_behind, Some(AheadBehind { ahead: 2, behind: 3 }));
+    assert_eq!(info(&repo, "up").ahead_behind, None, "`up` has no upstream of its own");
+}
+
+#[test]
+fn branch_info_compares_with_a_remote_tracking_branch() {
+    let repo = TestRepo::with_initial_commit();
+    let main = current(&repo);
+    let published = head(&repo);
+    repo.repo.remote("origin", "https://example.invalid/repo.git").unwrap();
+    repo.repo.reference("refs/remotes/origin/main", published, true, "fetch").unwrap();
+    track(&repo, &main, "origin/main");
+    repo.commit_file("a.txt", "a\n", "local 1");
+    repo.commit_file("b.txt", "b\n", "local 2");
+
+    let branch = info(&repo, &main);
+    assert_eq!(branch.upstream.as_deref(), Some("origin/main"));
+    assert_eq!(branch.ahead_behind, Some(AheadBehind { ahead: 2, behind: 0 }));
+
+    // someone else pushes: the remote moves on and we are behind as well
+    let theirs = repo.repo.find_commit(published).unwrap();
+    let sig = git2::Signature::now("Other", "other@example.com").unwrap();
+    let pushed = repo.repo.commit(None, &sig, &sig, "remote work", &theirs.tree().unwrap(), &[&theirs]).unwrap();
+    repo.repo.reference("refs/remotes/origin/main", pushed, true, "fetch").unwrap();
+    assert_eq!(info(&repo, &main).ahead_behind, Some(AheadBehind { ahead: 2, behind: 1 }));
+
+    // the remote-tracking branch itself is not compared with anything
+    assert_eq!(info(&repo, "origin/main").ahead_behind, None);
+}
+
+#[test]
+fn a_vanished_upstream_means_no_comparison() {
+    let repo = TestRepo::with_initial_commit();
+    create_branch(&repo.repo, "feature", None).unwrap();
+    create_branch(&repo.repo, "gone-soon", None).unwrap();
+    track(&repo, "feature", "gone-soon");
+    repo.repo.find_branch("gone-soon", git2::BranchType::Local).unwrap().delete().unwrap();
+
+    let branch = info(&repo, "feature");
+    assert_eq!(branch.ahead_behind, None);
+}
+
+#[test]
+fn created_branches_report_their_comparison_too() {
+    let repo = TestRepo::with_initial_commit();
+    let created = create_branch(&repo.repo, "feature", None).unwrap();
+    assert_eq!(created.ahead_behind, None, "a new branch has no upstream yet");
 }
