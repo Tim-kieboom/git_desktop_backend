@@ -34,6 +34,18 @@ pub enum GitError {
     /// The operation needs a working directory, but the repository is bare.
     #[error("repository has no working directory")]
     BareRepository,
+    /// Nothing is staged, or what is staged equals the last commit.
+    #[error("nothing to commit")]
+    NothingToCommit,
+    /// The commit message is empty or only whitespace.
+    #[error("commit message is empty")]
+    EmptyMessage,
+    /// `user.name` or `user.email` is not configured, so there is no author for the commit.
+    #[error("git identity is not configured (user.name / user.email)")]
+    MissingIdentity,
+    /// The index still has merge conflicts; resolve and stage the conflicted files first.
+    #[error("unresolved merge conflicts")]
+    UnresolvedConflicts,
 }
 impl From<git2::Error> for GitError {
     fn from(value: git2::Error) -> Self {

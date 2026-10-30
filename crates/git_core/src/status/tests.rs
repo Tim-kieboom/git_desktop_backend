@@ -23,7 +23,7 @@
 //!
 //! Wire it up with `pub mod status;` in `lib.rs` and `#[cfg(test)] mod tests;` in `status/mod.rs`.
 use super::*;
-use crate::test_utils::TestRepo;
+use crate::tests::TestRepo;
 use std::path::{Path, PathBuf};
 
 fn numbered(n: u32) -> String {

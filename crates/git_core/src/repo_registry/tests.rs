@@ -1,6 +1,6 @@
 use super::*;
 use crate::repo_registry::storage::memory_storage::MemoryStorage;
-use crate::test_utils::{TestRepo, plain_dir};
+use crate::tests::{TestRepo, plain_dir};
 
 fn registry() -> RepoRegistry<MemoryStorage> {
     RepoRegistry::<MemoryStorage>::new().unwrap()

@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_utils::TestRepo;
+use crate::tests::TestRepo;
 
 fn numbered(n: u32) -> String {
     (1..=n).map(|i| format!("line {i}\n")).collect()

@@ -5,9 +5,9 @@ use git_core::{
 };
 use std::{path::Path, sync::Arc};
 
-#[path = "../src/test_utils.rs"]
-mod test_utils;
-use test_utils::{TestRepo, plain_dir};
+#[path = "../src/tests/test_repo.rs"]
+mod test_repo;
+use test_repo::{TestRepo, plain_dir};
 
 /// Registry whose storage lives in `data` (JsonStorage::new() would use the real user dir).
 fn registry(data: &Path) -> RepoRegistry<JsonStorage> {

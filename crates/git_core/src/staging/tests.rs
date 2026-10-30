@@ -25,7 +25,7 @@ use crate::{
     diff::{DiffTarget, file_diff},
     error::GitError,
     status::{ChangeKind, StatusEntry, status},
-    test_utils::TestRepo,
+    tests::TestRepo,
 };
 use std::path::Path;
 

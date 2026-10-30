@@ -1,13 +1,16 @@
 //! Host-agnostic git engine: a persistent registry of local repositories and file diffs and status.
 
+mod commit;
+mod commit_id;
 mod diff;
 mod error;
 mod repo_registry;
 mod staging;
 mod status;
 #[cfg(test)]
-mod test_utils;
+mod tests;
 
+pub use commit_id::{CommitId, ParseCommitIdError};
 pub use diff::{DiffLine, DiffTarget, FileDiff, FileStatus, Hunk, LineKind};
 pub use error::{CoreError, CoreResult, GitError, GitResult};
 pub use repo_registry::*;
@@ -51,6 +54,16 @@ impl Repository {
     /// - [`GitError`] if `path` is absolute or a directory
     pub fn unstage(&self, path: &std::path::Path) -> CoreResult {
         staging::unstage(&self.raw, path).map_err(CoreError::from)
+    }
+
+    /// Commits what is staged and moves the current branch, like `git commit -m`.
+    ///
+    /// Returns the id of the new commit. See [`GitError`] for the ways this can fail: blank
+    /// message, nothing staged, no git identity configured, or unresolved merge conflicts.
+    pub fn commit(&self, message: &str) -> CoreResult<CommitId> {
+        commit::commit(&self.raw, message)
+            .map(CommitId::from_oid)
+            .map_err(CoreError::from)
     }
 
     /// Diff of one file, or `None` when that file has no changes for `target`.
