@@ -91,7 +91,7 @@ impl<S: RepoStorage> RepoRegistry<S> {
     }
 
     fn inner_find(&self, path: &Path) -> RepoResult<Option<RepoEntry>> {
-        let path = path.canonicalize().map_err(|e| StoreError::io(e))?;
+        let path = path.canonicalize().map_err(StoreError::io)?;
 
         let store = self.storage.load()?;
         Ok(self.find_by_path(&store, &path).cloned())

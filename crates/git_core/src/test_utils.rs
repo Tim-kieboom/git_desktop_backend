@@ -59,9 +59,7 @@ impl TestRepo {
     /// Stages everything, like `git add -A`.
     pub fn stage_all(&self) {
         let mut index = self.repo.index().unwrap();
-        index
-            .add_all(["*"], IndexAddOption::DEFAULT, None)
-            .unwrap();
+        index.add_all(["*"], IndexAddOption::DEFAULT, None).unwrap();
         // add_all skips deletions; update_all stages them
         index.update_all(["*"], None).unwrap();
         index.write().unwrap();
@@ -118,7 +116,9 @@ impl TestRepo {
     /// Lightweight tag on `HEAD`.
     pub fn tag(&self, name: &str) {
         let head = self.repo.head().unwrap().peel_to_commit().unwrap();
-        self.repo.tag_lightweight(name, head.as_object(), false).unwrap();
+        self.repo
+            .tag_lightweight(name, head.as_object(), false)
+            .unwrap();
     }
 }
 
