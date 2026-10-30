@@ -27,6 +27,13 @@ pub enum GitError {
     /// The path is not known to the repository: not in `HEAD`, not in the index and not on disk.
     #[error("path not found: {}", .0.display())]
     PathNotFound(PathBuf),
+    /// The path can't be used here: it must be a relative path to a single file inside the
+    /// working directory (not absolute, not a directory, no `..`).
+    #[error("invalid path: {}", .0.display())]
+    InvalidPath(PathBuf),
+    /// The operation needs a working directory, but the repository is bare.
+    #[error("repository has no working directory")]
+    BareRepository,
 }
 impl From<git2::Error> for GitError {
     fn from(value: git2::Error) -> Self {
