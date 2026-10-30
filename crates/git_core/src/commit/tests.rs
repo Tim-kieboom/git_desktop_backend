@@ -30,7 +30,7 @@ use crate::{
     status::{ChangeKind, status},
     tests::TestRepo,
 };
-use git2::{Config, ConfigLevel, Oid, RepositoryState};
+use git2::{Oid, RepositoryState};
 use std::path::Path;
 
 fn head_oid(repo: &TestRepo) -> Option<Oid> {
@@ -52,19 +52,6 @@ fn message_of(repo: &TestRepo, oid: Oid) -> String {
         .message()
         .unwrap()
         .to_owned()
-}
-
-/// Replaces the repository's config with one that has only `entries`, so the test doesn't depend
-/// on a `user.name` / `user.email` in the global git config of whoever runs it.
-fn isolate_config(repo: &TestRepo, entries: &[(&str, &str)]) {
-    let file = repo.path().join(".git").join("isolated-config");
-    std::fs::write(&file, "").unwrap();
-    let mut config = Config::new().unwrap();
-    config.add_file(&file, ConfigLevel::Local, false).unwrap();
-    for (key, value) in entries {
-        config.set_str(key, value).unwrap();
-    }
-    repo.repo.set_config(&mut config).unwrap();
 }
 
 // ================================================================ what gets committed
@@ -354,7 +341,7 @@ fn committing_twice_in_a_row_fails_the_second_time() {
 #[test]
 fn missing_name_is_missing_identity() {
     let repo = TestRepo::init();
-    isolate_config(&repo, &[("user.email", "test@example.com")]);
+    repo.isolate_config(&[("user.email", "test@example.com")]);
     repo.write("a.txt", "x\n");
     repo.stage("a.txt");
 
@@ -366,7 +353,7 @@ fn missing_name_is_missing_identity() {
 #[test]
 fn missing_email_is_missing_identity() {
     let repo = TestRepo::init();
-    isolate_config(&repo, &[("user.name", "Test User")]);
+    repo.isolate_config(&[("user.name", "Test User")]);
     repo.write("a.txt", "x\n");
     repo.stage("a.txt");
 
@@ -377,7 +364,7 @@ fn missing_email_is_missing_identity() {
 #[test]
 fn no_identity_at_all_is_missing_identity() {
     let repo = TestRepo::init();
-    isolate_config(&repo, &[]);
+    repo.isolate_config(&[]);
     repo.write("a.txt", "x\n");
     repo.stage("a.txt");
 

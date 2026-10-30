@@ -50,6 +50,33 @@ pub enum GitError {
     /// taken, or the hunk was already staged / unstaged.
     #[error("hunk not found in the current diff of {}", .0.display())]
     HunkNotFound(PathBuf),
+    /// The revision (branch, tag, commit id, `HEAD~2`, ...) doesn't name a commit.
+    #[error("revision not found: {0}")]
+    RevisionNotFound(String),
+    /// A branch, tag or reference name that git doesn't allow (`a b`, `a..b`, `x.lock`, ...).
+    #[error("invalid name: {0:?}")]
+    InvalidName(String),
+    /// There is no local branch with this name.
+    #[error("branch not found: {0}")]
+    BranchNotFound(String),
+    /// A branch with this name already exists.
+    #[error("branch already exists: {0}")]
+    BranchAlreadyExists(String),
+    /// The branch is checked out and can't be deleted.
+    #[error("cannot delete the checked-out branch: {0}")]
+    CurrentBranch(String),
+    /// The branch has commits that are not in `HEAD`; deleting it needs `force`.
+    #[error("branch is not fully merged: {0}")]
+    BranchNotMerged(String),
+    /// Switching branches would overwrite uncommitted changes.
+    #[error("local changes would be overwritten by the checkout")]
+    WouldOverwriteChanges,
+    /// There is no tag with this name.
+    #[error("tag not found: {0}")]
+    TagNotFound(String),
+    /// A tag with this name already exists.
+    #[error("tag already exists: {0}")]
+    TagAlreadyExists(String),
 }
 impl From<git2::Error> for GitError {
     fn from(value: git2::Error) -> Self {

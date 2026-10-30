@@ -2,7 +2,7 @@
 //!
 //! All paths are relative to the repository working directory.
 
-use git2::{Delta, DiffOptions, Patch, Repository};
+use git2::{Commit, Delta, Diff, DiffOptions, Patch, Repository};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -146,10 +146,27 @@ pub fn diff_files(
     };
 
     diff.find_similar(None)?;
+    collect_files(&diff)
+}
 
+/// What `commit` changed: its diff against the first parent, or against the empty tree for a
+/// root commit. Renames are detected.
+pub(crate) fn commit_diff(repo: &Repository, commit: &Commit<'_>) -> Result<Vec<FileDiff>, GitError> {
+    let new_tree = commit.tree()?;
+    let old_tree = match commit.parent(0) {
+        Ok(parent) => Some(parent.tree()?),
+        Err(_) => None,
+    };
+
+    let mut diff = repo.diff_tree_to_tree(old_tree.as_ref(), Some(&new_tree), None)?;
+    diff.find_similar(None)?;
+    collect_files(&diff)
+}
+
+fn collect_files(diff: &Diff<'_>) -> Result<Vec<FileDiff>, GitError> {
     let mut files = Vec::new();
     for index in 0..diff.deltas().len() {
-        if let Some(mut patch) = Patch::from_diff(&diff, index)? {
+        if let Some(mut patch) = Patch::from_diff(diff, index)? {
             files.push(convert_patch(&mut patch)?);
         }
     }

@@ -1,19 +1,27 @@
 //! Host-agnostic git engine: a persistent registry of local repositories and file diffs and status.
 
+mod branch;
 mod commit;
 mod commit_id;
 mod diff;
 mod error;
+mod log;
 mod repo_registry;
+mod revision;
 mod staging;
 mod status;
+mod tag;
 #[cfg(test)]
 mod tests;
 
+pub use branch::{BranchInfo, BranchKind};
 pub use commit_id::{CommitId, ParseCommitIdError};
 pub use diff::{DiffLine, DiffTarget, FileDiff, FileStatus, Hunk, LineKind};
+pub use log::{CommitDetail, CommitInfo, LogPage, LogQuery, Person};
 pub use error::{CoreError, CoreResult, GitError, GitResult};
 pub use repo_registry::*;
+pub use status::{ChangeKind, StatusEntry};
+pub use tag::TagInfo;
 
 pub struct Repository {
     raw: git2::Repository,
@@ -81,6 +89,58 @@ impl Repository {
         commit::commit(&self.raw, message)
             .map(CommitId::from_oid)
             .map_err(CoreError::from)
+    }
+
+    /// The commit history, newest first. See [`LogQuery`] for the revision range, path and author
+    /// filters and for pagination.
+    pub fn log(&self, query: &LogQuery) -> CoreResult<LogPage> {
+        log::log(&self.raw, query).map_err(CoreError::from)
+    }
+
+    /// A commit with the files it changed (its diff against the first parent).
+    pub fn commit_detail(&self, id: CommitId) -> CoreResult<CommitDetail> {
+        log::commit_detail(&self.raw, id).map_err(CoreError::from)
+    }
+
+    /// Local branches followed by remote ones, each sorted by name.
+    pub fn branches(&self) -> CoreResult<Vec<BranchInfo>> {
+        branch::list_branches(&self.raw).map_err(CoreError::from)
+    }
+
+    /// Creates a local branch at `start` (a revision, `HEAD` when `None`) without checking it out.
+    pub fn create_branch(&self, name: &str, start: Option<&str>) -> CoreResult<BranchInfo> {
+        branch::create_branch(&self.raw, name, start).map_err(CoreError::from)
+    }
+
+    /// Switches to a local branch. Uncommitted changes come along unless they would be
+    /// overwritten ([`GitError::WouldOverwriteChanges`]).
+    pub fn checkout_branch(&self, name: &str) -> CoreResult {
+        branch::checkout_branch(&self.raw, name).map_err(CoreError::from)
+    }
+
+    /// Deletes a local branch; one with unmerged commits needs `force`.
+    pub fn delete_branch(&self, name: &str, force: bool) -> CoreResult {
+        branch::delete_branch(&self.raw, name, force).map_err(CoreError::from)
+    }
+
+    /// All tags that point at a commit, sorted by name.
+    pub fn tags(&self) -> CoreResult<Vec<TagInfo>> {
+        tag::list_tags(&self.raw).map_err(CoreError::from)
+    }
+
+    /// Creates a lightweight tag, or an annotated one when `message` is given.
+    pub fn create_tag(
+        &self,
+        name: &str,
+        start: Option<&str>,
+        message: Option<&str>,
+    ) -> CoreResult<TagInfo> {
+        tag::create_tag(&self.raw, name, start, message).map_err(CoreError::from)
+    }
+
+    /// Deletes a tag; the commit stays.
+    pub fn delete_tag(&self, name: &str) -> CoreResult {
+        tag::delete_tag(&self.raw, name).map_err(CoreError::from)
     }
 
     /// Diff of one file, or `None` when that file has no changes for `target`.

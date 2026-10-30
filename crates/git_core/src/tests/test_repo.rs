@@ -82,6 +82,49 @@ impl TestRepo {
             .unwrap()
     }
 
+    /// Like [`TestRepo::commit`] but with another author and committer.
+    pub fn commit_as(&self, name: &str, email: &str, message: &str) -> Oid {
+        self.commit_signed(&Signature::now(name, email).unwrap(), message)
+    }
+
+    /// Like [`TestRepo::commit`] but at a fixed time (seconds since the unix epoch).
+    pub fn commit_at(&self, message: &str, unix_seconds: i64) -> Oid {
+        let sig =
+            Signature::new("Test User", "test@example.com", &git2::Time::new(unix_seconds, 0))
+                .unwrap();
+        self.commit_signed(&sig, message)
+    }
+
+    fn commit_signed(&self, sig: &Signature<'_>, message: &str) -> Oid {
+        let mut index = self.repo.index().unwrap();
+        let tree = self.as_raw().find_tree(index.write_tree().unwrap()).unwrap();
+        let parent = self.repo.head().ok().map(|h| h.peel_to_commit().unwrap());
+        let parents: Vec<_> = parent.iter().collect();
+        self.as_raw()
+            .commit(Some("HEAD"), sig, sig, message, &tree, &parents)
+            .unwrap()
+    }
+
+    /// Writes, stages and commits one file as `name <email>`.
+    pub fn commit_file_as(&self, rel: &str, contents: &str, message: &str, name: &str, email: &str) -> Oid {
+        self.write(rel, contents);
+        self.stage(rel);
+        self.commit_as(name, email, message)
+    }
+
+    /// Replaces the repository's config with one that has only `entries`, so a test doesn't depend
+    /// on a `user.name` / `user.email` in the global git config of whoever runs it.
+    pub fn isolate_config(&self, entries: &[(&str, &str)]) {
+        let file = self.path().join(".git").join("isolated-config");
+        std::fs::write(&file, "").unwrap();
+        let mut config = git2::Config::new().unwrap();
+        config.add_file(&file, git2::ConfigLevel::Local, false).unwrap();
+        for (key, value) in entries {
+            config.set_str(key, value).unwrap();
+        }
+        self.repo.set_config(&mut config).unwrap();
+    }
+
     /// Writes, stages and commits one file.
     pub fn commit_file(&self, rel: &str, contents: &str, message: &str) -> Oid {
         self.write(rel, contents);

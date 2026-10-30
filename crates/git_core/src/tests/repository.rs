@@ -2,7 +2,7 @@
 //! with the integration tests).
 
 use crate::tests::TestRepo;
-use crate::{CommitId, CoreError, DiffTarget, GitError};
+use crate::{CommitId, CoreError, DiffTarget, GitError, LogQuery};
 
 fn open(repo: &TestRepo) -> crate::Repository {
     crate::Repository {
@@ -88,4 +88,73 @@ fn stale_hunk_is_a_core_error() {
 
     let err = wrapper.stage_hunk(path, &hunk).unwrap_err();
     assert!(matches!(err, CoreError::Git(GitError::HunkNotFound(_))), "{err:?}");
+}
+
+#[test]
+fn release_workflow_through_the_wrapper() {
+    let repo = TestRepo::init();
+    let wrapper = open(&repo);
+    let edit_and_commit = |content: &str, message: &str| {
+        repo.write("f.txt", content);
+        wrapper.stage(std::path::Path::new("f.txt")).unwrap();
+        wrapper.commit(message).unwrap()
+    };
+
+    let first = edit_and_commit("1\n", "feat: first");
+    wrapper.create_tag("v1.0.0", None, Some("Release 1.0.0")).unwrap();
+    edit_and_commit("2\n", "fix: second");
+    edit_and_commit("3\n", "feat: third");
+
+    // what changed since the release
+    let since = LogQuery { exclude: Some("v1.0.0".into()), ..LogQuery::default() };
+    let page = wrapper.log(&since).unwrap();
+    let summaries: Vec<_> = page.commits.iter().map(|c| c.summary.as_str()).collect();
+    assert_eq!(summaries, ["feat: third", "fix: second"]);
+
+    let tags = wrapper.tags().unwrap();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0].target, first);
+    assert!(tags[0].annotated);
+
+    let detail = wrapper.commit_detail(page.commits[0].id).unwrap();
+    assert_eq!(detail.files.len(), 1);
+    assert_eq!(&*detail.files[0].path, std::path::Path::new("f.txt"));
+}
+
+#[test]
+fn branch_workflow_through_the_wrapper() {
+    let repo = TestRepo::with_initial_commit();
+    let wrapper = open(&repo);
+
+    wrapper.create_branch("feature", None).unwrap();
+    wrapper.checkout_branch("feature").unwrap();
+    repo.write("new.txt", "x\n");
+    wrapper.stage(std::path::Path::new("new.txt")).unwrap();
+    wrapper.commit("work on feature").unwrap();
+
+    let branches = wrapper.branches().unwrap();
+    assert!(branches.iter().find(|b| b.name == "feature").unwrap().is_head);
+
+    let err = wrapper.delete_branch("feature", false).unwrap_err();
+    assert!(matches!(err, CoreError::Git(GitError::CurrentBranch(_))), "{err:?}");
+
+    let other = branches.iter().find(|b| b.name != "feature").unwrap().name.clone();
+    wrapper.checkout_branch(&other).unwrap();
+    let err = wrapper.delete_branch("feature", false).unwrap_err();
+    assert!(matches!(err, CoreError::Git(GitError::BranchNotMerged(_))), "{err:?}");
+    wrapper.delete_branch("feature", true).unwrap();
+    assert_eq!(wrapper.branches().unwrap().len(), 1);
+}
+
+#[test]
+fn tag_errors_are_core_errors() {
+    let repo = TestRepo::with_initial_commit();
+    let wrapper = open(&repo);
+    wrapper.create_tag("v1", None, None).unwrap();
+
+    let err = wrapper.create_tag("v1", None, None).unwrap_err();
+    assert!(matches!(err, CoreError::Git(GitError::TagAlreadyExists(_))), "{err:?}");
+    wrapper.delete_tag("v1").unwrap();
+    let err = wrapper.delete_tag("v1").unwrap_err();
+    assert!(matches!(err, CoreError::Git(GitError::TagNotFound(_))), "{err:?}");
 }

@@ -22,6 +22,10 @@ impl CommitId {
         Self(oid)
     }
 
+    pub(crate) fn to_oid(self) -> Oid {
+        self.0
+    }
+
     /// The first 7 characters, as shown in most git UIs. Not guaranteed to be unique.
     pub fn short(&self) -> String {
         self.0.to_string()[..SHORT_LEN].to_owned()
